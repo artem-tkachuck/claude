@@ -1,0 +1,252 @@
+# see https://symfony.com/doc/current/reference/configuration/framework.html
+framework:
+  secret: '%env(APP_SECRET)%'
+  #csrf_protection: true
+  http_method_override: false
+  handle_all_throwables: true
+
+  # Enables session support. Note that the session will ONLY be started if you read or write from it.
+  # Remove or comment this section to explicitly disable session support.
+  session:
+    handler_id: 'redis://:%env(REDIS_PASSWORD)%@%env(REDIS_HOST)%:%env(int:REDIS_PORT)%/0'
+    cookie_secure: auto
+    cookie_samesite: lax
+    storage_factory_id: session.storage.factory.native
+    cookie_lifetime: '%env(int:SESSION_LIFETIME)%'
+    gc_maxlifetime: '%env(int:SESSION_LIFETIME)%'
+    save_path: null
+    name: INVESTMENT_SESSION
+    cookie_httponly: true
+    use_cookies: true
+
+  #esi: true
+  fragments: true
+  php_errors:
+    log: true
+
+  # Cache configuration
+  cache:
+    app: cache.adapter.redis
+    default_redis_provider: 'redis://:%env(REDIS_PASSWORD)%@%env(REDIS_HOST)%:%env(int:REDIS_PORT)%'
+    pools:
+      # Application cache
+      cache.app:
+        adapter: cache.adapter.redis
+        provider: 'redis://:%env(REDIS_PASSWORD)%@%env(REDIS_HOST)%:%env(int:REDIS_PORT)%/1'
+        default_lifetime: 3600
+
+      # Rate limiter cache
+      cache.rate_limiter:
+        adapter: cache.adapter.redis
+        provider: 'redis://:%env(REDIS_PASSWORD)%@%env(REDIS_HOST)%:%env(int:REDIS_PORT)%/2'
+
+      # Security cache (for login attempts, etc)
+      cache.security:
+        adapter: cache.adapter.redis
+        provider: 'redis://:%env(REDIS_PASSWORD)%@%env(REDIS_HOST)%:%env(int:REDIS_PORT)%/3'
+        default_lifetime: 86400
+
+      # Telegram cache
+      cache.telegram:
+        adapter: cache.adapter.redis
+        provider: 'redis://:%env(REDIS_PASSWORD)%@%env(REDIS_HOST)%:%env(int:REDIS_PORT)%/4'
+        default_lifetime: 300
+
+      # Blockchain data cache
+      cache.blockchain:
+        adapter: cache.adapter.redis
+        provider: 'redis://:%env(REDIS_PASSWORD)%@%env(REDIS_HOST)%:%env(int:REDIS_PORT)%/5'
+        default_lifetime: 60
+
+  # Validation
+  validation:
+    email_validation_mode: html5
+    enable_annotations: true
+    auto_mapping:
+      App\Entity\: [ ]
+
+  # Serializer
+  serializer:
+    enable_annotations: true
+    mapping:
+      paths:
+        - '%kernel.project_dir%/config/serialization'
+
+  # Property access
+  property_access:
+    magic_call: false
+    magic_get: true
+    magic_set: true
+
+  # Property info
+  property_info:
+    enabled: true
+
+  # Mailer
+  mailer:
+    dsn: '%env(MAILER_DSN)%'
+    envelope:
+      sender: '%env(MAILER_FROM)%'
+    headers:
+      from: '%env(MAILER_FROM_NAME)% <%env(MAILER_FROM)%>'
+
+  # Notifier
+  notifier:
+    chatter_transports:
+      telegram: '%env(TELEGRAM_DSN)%'
+    channel_policy:
+      urgent: [ 'telegram', 'email' ]
+      high: [ 'telegram', 'email' ]
+      medium: [ 'email' ]
+      low: [ 'email' ]
+    admin_recipients:
+      - { email: '%env(ADMIN_EMAIL)%', phone: '%env(ADMIN_PHONE)%' }
+
+  # Lock
+  lock:
+    enabled: true
+    resources:
+      default:
+        - 'redis://:%env(REDIS_PASSWORD)%@%env(REDIS_HOST)%:%env(int:REDIS_PORT)%/6'
+
+  # Rate limiter
+  rate_limiter:
+    # API rate limiter
+    api:
+      policy: 'sliding_window'
+      limit: 100
+      interval: '1 minute'
+
+    # Authentication rate limiter
+    auth:
+      policy: 'fixed_window'
+      limit: 5
+      interval: '15 minutes'
+
+    # Withdrawal rate limiter
+    withdrawal:
+      policy: 'token_bucket'
+      limit: 10
+      interval: '24 hours'
+      rate: { amount: 10, interval: '24 hours' }
+
+    # Telegram webhook rate limiter
+    telegram_webhook:
+      policy: 'sliding_window'
+      limit: 1000
+      interval: '1 minute'
+
+    # Deposit check rate limiter
+    deposit_check:
+      policy: 'sliding_window'
+      limit: 30
+      interval: '1 minute'
+
+  # HTTP Client
+  http_client:
+    scoped_clients:
+      # Tron API client
+      tron.client:
+        base_uri: 'https://api.trongrid.io'
+        headers:
+          'TRON-PRO-API-KEY': '%env(TRON_API_KEY)%'
+        timeout: 30
+        max_redirects: 0
+
+      # Blockchain backup API
+      blockchain.backup.client:
+        base_uri: 'https://api.tronscan.org'
+        timeout: 30
+
+      # GeoIP client
+      geoip.client:
+        base_uri: 'https://api.ipgeolocation.io'
+        headers:
+          'apiKey': '%env(GEOIP_API_KEY)%'
+        timeout: 10
+
+      # Exchange rate client
+      exchange.client:
+        base_uri: 'https://api.exchangerate-api.com'
+        timeout: 10
+
+  # Assets
+  assets:
+    json_manifest_path: '%kernel.project_dir%/public/build/manifest.json'
+
+  # Translator
+  translator:
+    default_locale: '%env(DEFAULT_LOCALE)%'
+    enabled_locales: [ 'en', 'uk', 'ru' ]
+    providers:
+      loco:
+        dsn: '%env(LOCO_DSN)%'
+        locales: [ 'en', 'uk', 'ru' ]
+
+  # Workflows
+  workflows:
+    withdrawal:
+      type: 'state_machine'
+      marking_store:
+        type: 'method'
+        property: 'status'
+      supports:
+        - App\Entity\Withdrawal
+      initial_marking: pending
+      places:
+        - pending
+        - processing
+        - approved
+        - completed
+        - rejected
+        - failed
+      transitions:
+        process:
+          from: pending
+          to: processing
+        approve:
+          from: processing
+          to: approved
+        complete:
+          from: approved
+          to: completed
+        reject:
+          from: [ pending, processing ]
+          to: rejected
+        fail:
+          from: [ processing, approved ]
+          to: failed
+
+when@test:
+  framework:
+    test: true
+    session:
+      storage_factory_id: session.storage.factory.mock_file
+    profiler:
+      collect: false
+    cache:
+      app: cache.adapter.array
+    rate_limiter:
+      api:
+        limit: 1000
+      auth:
+        limit: 100
+
+when@dev:
+  framework:
+    profiler:
+      only_exceptions: false
+      collect_serializer_data: true
+
+when@prod:
+  framework:
+    cache:
+      pools:
+        cache.app:
+          adapter: cache.adapter.redis
+          provider: 'redis://:%env(REDIS_PASSWORD)%@%env(REDIS_HOST)%:%env(int:REDIS_PORT)%/1'
+          default_lifetime: 7200
+          tags: true
+    session:
+      cookie_secure: true
+      cookie_samesite: strict

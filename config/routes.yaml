@@ -1,0 +1,55 @@
+# Main routes configuration file
+
+# Controllers routing using attributes
+controllers:
+  resource:
+    path: ../src/Controller/
+    namespace: App\Controller
+  type: attribute
+
+# API routes
+api:
+  resource: ../src/Controller/Api/
+  type: attribute
+  prefix: /api
+  name_prefix: api_
+  defaults:
+    _format: json
+  requirements:
+    _format: json
+
+# Admin routes
+admin:
+  resource: ../src/Controller/Admin/
+  type: attribute
+  prefix: /admin
+  name_prefix: admin_
+
+# Telegram webhook routes
+telegram:
+  resource: ../src/Controller/Telegram/
+  type: attribute
+  prefix: /telegram
+  name_prefix: telegram_
+
+# Include additional route files
+_routes:
+  resource: routes/
+  type: directory
+
+# Kernel routes (when enabled)
+_profiler:
+  resource: '@WebProfilerBundle/Resources/config/routing/wdt.xml'
+  prefix: /_wdt
+
+_profiler_home:
+  resource: '@WebProfilerBundle/Resources/config/routing/profiler.xml'
+  prefix: /_profiler
+
+# Root redirect
+index:
+  path: /
+  controller: Symfony\Bundle\FrameworkBundle\Controller\RedirectController
+  defaults:
+    route: 'app_dashboard'
+    permanent: false

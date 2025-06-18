@@ -1,0 +1,156 @@
+lexik_jwt_authentication:
+  # JWT encoder/decoder configuration
+  secret_key: '%env(resolve:JWT_SECRET_KEY)%'
+  public_key: '%env(resolve:JWT_PUBLIC_KEY)%'
+  pass_phrase: '%env(JWT_PASSPHRASE)%'
+
+  # Token TTL (time to live) in seconds
+  token_ttl: 3600 # 1 hour
+
+  # Refresh token TTL
+  refresh_token_ttl: 2592000 # 30 days
+
+  # Clock skew tolerance in seconds
+  clock_skew: 0
+
+  # Token creation settings
+  user_identity_field: username
+
+  # Additional JWT claims
+  set_cookies:
+    BEARER:
+      lifetime: 3600
+      samesite: strict
+      path: /
+      domain: null
+      secure: true
+      httpOnly: true
+      split:
+        - header
+        - payload
+        - signature
+
+  # Token extractors configuration
+  token_extractors:
+    # Extract token from Authorization header
+    authorization_header:
+      enabled: true
+      prefix: Bearer
+      name: Authorization
+
+    # Extract token from cookie
+    cookie:
+      enabled: true
+      name: BEARER
+
+    # Extract token from query parameter (not recommended for production)
+    query_parameter:
+      enabled: false
+      name: bearer
+
+    # Extract split token from cookies
+    split_cookie:
+      enabled: true
+      cookies:
+        - jwt_header
+        - jwt_payload
+        - jwt_signature
+
+  # Encoder configuration
+  encoder:
+    # Signature algorithm
+    signature_algorithm: RS256
+
+  # Additional data to include in JWT payload
+  additional_payload:
+    # Add user roles to JWT
+    roles: true
+    # Add user ID
+    user_id: true
+    # Add telegram ID if available
+    telegram_id: true
+    # Add user status
+    is_active: true
+    # Add 2FA status
+    two_factor_enabled: true
+
+# Event listeners for JWT
+services:
+  # JWT Created listener - add custom data to JWT
+  App\EventListener\JWTCreatedListener:
+    arguments:
+      - '@request_stack'
+    tags:
+      - { name: kernel.event_listener, event: lexik_jwt_authentication.on_jwt_created, method: onJWTCreated }
+
+  # JWT Decoded listener - validate custom claims
+  App\EventListener\JWTDecodedListener:
+    arguments:
+      - '@request_stack'
+      - '@doctrine.orm.entity_manager'
+    tags:
+      - { name: kernel.event_listener, event: lexik_jwt_authentication.on_jwt_decoded, method: onJWTDecoded }
+
+  # JWT Authenticated listener - update last activity
+  App\EventListener\JWTAuthenticatedListener:
+    arguments:
+      - '@doctrine.orm.entity_manager'
+    tags:
+      - { name: kernel.event_listener, event: lexik_jwt_authentication.on_jwt_authenticated, method: onJWTAuthenticated }
+
+  # JWT Invalid listener - log invalid attempts
+  App\EventListener\JWTInvalidListener:
+    arguments:
+      - '@logger'
+    tags:
+      - { name: kernel.event_listener, event: lexik_jwt_authentication.on_jwt_invalid, method: onJWTInvalid }
+      - { name: monolog.logger, channel: security }
+
+  # JWT Not Found listener
+  App\EventListener\JWTNotFoundListener:
+    tags:
+      - { name: kernel.event_listener, event: lexik_jwt_authentication.on_jwt_not_found, method: onJWTNotFound }
+
+  # Authentication failure listener
+  App\EventListener\AuthenticationFailureListener:
+    arguments:
+      - '@translator'
+    tags:
+      - { name: kernel.event_listener, event: lexik_jwt_authentication.on_authentication_failure, method: onAuthenticationFailure }
+
+  # JWT Expired listener
+  App\EventListener\JWTExpiredListener:
+    tags:
+      - { name: kernel.event_listener, event: lexik_jwt_authentication.on_jwt_expired, method: onJWTExpired }
+
+  # Custom JWT encoder for additional security
+  App\Service\Security\CustomJWTEncoder:
+    decorates: lexik_jwt_authentication.encoder
+    arguments:
+      - '@.inner'
+      - '@App\Service\Security\EncryptionService'
+      - '%kernel.environment%'
+
+# Configure for different environments
+when@dev:
+  lexik_jwt_authentication:
+    token_ttl: 86400 # 24 hours for development
+
+when@test:
+  lexik_jwt_authentication:
+    secret_key: '%kernel.project_dir%/config/jwt/private-test.pem'
+    public_key: '%kernel.project_dir%/config/jwt/public-test.pem'
+    pass_phrase: 'test'
+
+when@prod:
+  lexik_jwt_authentication:
+    # Shorter TTL in production for security
+    token_ttl: 1800 # 30 minutes
+
+    # Stricter token validation
+    clock_skew: 30
+
+    # Disable query parameter extractor in production
+    token_extractors:
+      query_parameter:
+        enabled: false

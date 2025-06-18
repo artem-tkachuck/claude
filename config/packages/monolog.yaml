@@ -1,0 +1,229 @@
+monolog:
+  channels:
+    - deprecation # Deprecations are logged in the dedicated "deprecation" channel when it exists
+    - security
+    - doctrine
+    - telegram
+    - blockchain
+    - transaction
+    - fraud
+    - admin
+
+when@dev:
+  monolog:
+    handlers:
+      main:
+        type: stream
+        path: "%kernel.logs_dir%/%kernel.environment%.log"
+        level: debug
+        channels: [ "!event", "!doctrine", "!deprecation" ]
+
+      console:
+        type: console
+        process_psr_3_messages: false
+        channels: [ "!event", "!doctrine", "!deprecation" ]
+
+      doctrine:
+        type: stream
+        path: "%kernel.logs_dir%/doctrine.log"
+        level: debug
+        channels: [ "doctrine" ]
+
+      deprecation:
+        type: stream
+        path: "%kernel.logs_dir%/deprecation.log"
+        channels: [ deprecation ]
+
+when@test:
+  monolog:
+    handlers:
+      main:
+        type: fingers_crossed
+        action_level: error
+        handler: nested
+        excluded_http_codes: [ 404, 405 ]
+        channels: [ "!event" ]
+      nested:
+        type: stream
+        path: "%kernel.logs_dir%/%kernel.environment%.log"
+        level: debug
+
+when@prod:
+  monolog:
+    handlers:
+      # Main application log
+      main:
+        type: fingers_crossed
+        action_level: error
+        handler: nested
+        excluded_http_codes: [ 404, 405 ]
+        buffer_size: 50 # How many messages should be saved? Prevent memory leaks
+        channels: [ "!event", "!deprecation", "!security", "!telegram", "!blockchain", "!transaction", "!fraud" ]
+
+      nested:
+        type: rotating_file
+        path: "%kernel.logs_dir%/%kernel.environment%.log"
+        level: info
+        max_files: 14
+
+      # Console output for important messages
+      console:
+        type: console
+        process_psr_3_messages: false
+        channels: [ "!event", "!doctrine", "!deprecation" ]
+
+      # Security channel - critical security events
+      security:
+        type: rotating_file
+        path: "%kernel.logs_dir%/security.log"
+        level: info
+        channels: [ security ]
+        max_files: 30
+        formatter: monolog.formatter.json
+
+      # Telegram bot operations
+      telegram:
+        type: rotating_file
+        path: "%kernel.logs_dir%/telegram.log"
+        level: info
+        channels: [ telegram ]
+        max_files: 7
+
+      # Blockchain operations - critical
+      blockchain:
+        type: group
+        members: [ blockchain_file, blockchain_email ]
+        channels: [ blockchain ]
+
+      blockchain_file:
+        type: rotating_file
+        path: "%kernel.logs_dir%/blockchain.log"
+        level: info
+        max_files: 30
+        formatter: monolog.formatter.json
+
+      blockchain_email:
+        type: native_mailer
+        from_email: '%env(MAILER_FROM)%'
+        to_email: '%env(ADMIN_EMAIL)%'
+        subject: '[CRITICAL] Blockchain Operation Error'
+        level: error
+        formatter: html
+        content_type: text/html
+
+      # Transaction monitoring
+      transaction:
+        type: rotating_file
+        path: "%kernel.logs_dir%/transactions.log"
+        level: info
+        channels: [ transaction ]
+        max_files: 90
+        formatter: monolog.formatter.json
+
+      # Fraud detection
+      fraud:
+        type: group
+        members: [ fraud_file, fraud_telegram, fraud_email ]
+        channels: [ fraud ]
+
+      fraud_file:
+        type: rotating_file
+        path: "%kernel.logs_dir%/fraud.log"
+        level: warning
+        max_files: 90
+        formatter: monolog.formatter.json
+
+      fraud_telegram:
+        type: telegram
+        level: warning
+        token: '%env(TELEGRAM_BOT_TOKEN)%'
+        channel: '%env(TELEGRAM_ADMIN_CHAT_ID)%'
+        parse_mode: 'HTML'
+        disable_notification: false
+
+      fraud_email:
+        type: native_mailer
+        from_email: '%env(MAILER_FROM)%'
+        to_email: '%env(ADMIN_EMAIL)%'
+        subject: '[URGENT] Fraud Detection Alert'
+        level: critical
+        formatter: html
+        content_type: text/html
+
+      # Admin actions audit trail
+      admin:
+        type: rotating_file
+        path: "%kernel.logs_dir%/admin_actions.log"
+        level: info
+        channels: [ admin ]
+        max_files: 365
+        formatter: monolog.formatter.json
+
+      # Deprecation log
+      deprecation:
+        type: rotating_file
+        path: "%kernel.logs_dir%/deprecation.log"
+        channels: [ deprecation ]
+        max_files: 7
+
+      # Error aggregation for monitoring services
+      sentry:
+        type: sentry
+        dsn: '%env(SENTRY_DSN)%'
+        level: error
+        hub_id: default
+        release: '%env(APP_VERSION)%'
+        environment: '%kernel.environment%'
+
+      # Slack notifications for critical errors
+      slack:
+        type: slack
+        token: '%env(SLACK_TOKEN)%'
+        channel: '%env(SLACK_CHANNEL)%'
+        bot_name: 'CryptoInvestmentBot'
+        icon_emoji: ':warning:'
+        level: critical
+        include_extra: true
+
+      # Database query logger (only slow queries)
+      doctrine:
+        type: rotating_file
+        path: "%kernel.logs_dir%/doctrine.log"
+        level: debug
+        channels: [ doctrine ]
+        max_files: 7
+
+    # Processors to add extra data
+    processors:
+      # Add request data
+      - Monolog\Processor\WebProcessor:
+          extra_fields:
+            url: REQUEST_URI
+            method: REQUEST_METHOD
+            referrer: HTTP_REFERER
+            user_agent: HTTP_USER_AGENT
+
+      # Add user data
+      - App\Logger\Processor\UserProcessor
+
+      # Add Git revision
+      - Monolog\Processor\GitProcessor
+
+      # Add memory usage
+      - Monolog\Processor\MemoryUsageProcessor
+
+      # Add unique ID
+      - Monolog\Processor\UidProcessor
+
+# Custom logger services
+services:
+  App\Logger\Processor\UserProcessor:
+    tags:
+      - { name: monolog.processor }
+
+  App\Logger\Handler\TelegramHandler:
+    arguments:
+      - '%env(TELEGRAM_BOT_TOKEN)%'
+      - '%env(TELEGRAM_ADMIN_CHAT_ID)%'
+    tags:
+      - { name: monolog.handler }

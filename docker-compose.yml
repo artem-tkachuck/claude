@@ -1,0 +1,174 @@
+version: '3.9'
+
+x-logging: &default-logging
+  driver: "json-file"
+  options:
+    max-size: "10m"
+    max-file: "3"
+
+services:
+  nginx:
+    build:
+      context: ./.docker/nginx
+      args:
+        - NGINX_VERSION=1.25-alpine
+    container_name: crypto_nginx
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./public:/var/www/public:ro
+      - ./var/log/nginx:/var/log/nginx
+      - ./ssl:/etc/nginx/ssl:ro
+      - /etc/letsencrypt:/etc/letsencrypt:ro
+    depends_on:
+      - php
+    networks:
+      - crypto_network
+    logging: *default-logging
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - DAC_OVERRIDE
+      - SETGID
+      - SETUID
+
+  php:
+    build:
+      context: ./.docker/php
+      args:
+        - PHP_VERSION=8.2-fpm-alpine
+    container_name: crypto_php
+    restart: unless-stopped
+    volumes:
+      - ./:/var/www:cached
+      - ./var/log/php:/var/log/php
+    environment:
+      - APP_ENV=${APP_ENV:-prod}
+      - APP_SECRET=${APP_SECRET}
+      - DATABASE_URL=mysql://${DB_USER}:${DB_PASS}@mysql:3306/${DB_NAME}?serverVersion=8.0&charset=utf8mb4
+      - REDIS_URL=redis://:${REDIS_PASSWORD}@redis:6379
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
+      - TELEGRAM_WEBHOOK_SECRET=${TELEGRAM_WEBHOOK_SECRET}
+      - COLD_WALLET_ADDRESS=${COLD_WALLET_ADDRESS}
+      - HOT_WALLET_ADDRESS=${HOT_WALLET_ADDRESS}
+      - TRON_API_KEY=${TRON_API_KEY}
+    depends_on:
+      - mysql
+      - redis
+    networks:
+      - crypto_network
+    logging: *default-logging
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+
+  mysql:
+    image: mysql:8.0
+    container_name: crypto_mysql
+    restart: unless-stopped
+    environment:
+      - MYSQL_ROOT_PASSWORD=${MYSQL_ROOT_PASSWORD}
+      - MYSQL_DATABASE=${DB_NAME}
+      - MYSQL_USER=${DB_USER}
+      - MYSQL_PASSWORD=${DB_PASS}
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./.docker/mysql/my.cnf:/etc/mysql/conf.d/my.cnf:ro
+      - ./backup/mysql:/backup
+    ports:
+      - "3306:3306"
+    networks:
+      - crypto_network
+    logging: *default-logging
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - DAC_OVERRIDE
+      - SETGID
+      - SETUID
+
+  redis:
+    image: redis:7-alpine
+    container_name: crypto_redis
+    restart: unless-stopped
+    command: redis-server /usr/local/etc/redis/redis.conf
+    volumes:
+      - redis_data:/data
+      - ./.docker/redis/redis.conf:/usr/local/etc/redis/redis.conf:ro
+    ports:
+      - "6379:6379"
+    networks:
+      - crypto_network
+    logging: *default-logging
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - SETGID
+      - SETUID
+
+  rabbitmq:
+    image: rabbitmq:3-management-alpine
+    container_name: crypto_rabbitmq
+    restart: unless-stopped
+    environment:
+      - RABBITMQ_DEFAULT_USER=${RABBITMQ_USER}
+      - RABBITMQ_DEFAULT_PASS=${RABBITMQ_PASS}
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    networks:
+      - crypto_network
+    logging: *default-logging
+
+  messenger-consume:
+    build:
+      context: ./.docker/php
+      args:
+        - PHP_VERSION=8.2-fpm-alpine
+    container_name: crypto_messenger
+    restart: unless-stopped
+    command: [ "php", "bin/console", "messenger:consume", "async", "blockchain", "notifications", "--limit=1000", "--time-limit=3600" ]
+    volumes:
+      - ./:/var/www:cached
+    environment:
+      - APP_ENV=${APP_ENV:-prod}
+      - APP_SECRET=${APP_SECRET}
+      - DATABASE_URL=mysql://${DB_USER}:${DB_PASS}@mysql:3306/${DB_NAME}?serverVersion=8.0&charset=utf8mb4
+      - REDIS_URL=redis://:${REDIS_PASSWORD}@redis:6379
+      - MESSENGER_TRANSPORT_DSN=amqp://${RABBITMQ_USER}:${RABBITMQ_PASS}@rabbitmq:5672/%2f/messages
+    depends_on:
+      - mysql
+      - redis
+      - rabbitmq
+    networks:
+      - crypto_network
+    logging: *default-logging
+
+volumes:
+  mysql_data:
+    driver: local
+  redis_data:
+    driver: local
+  rabbitmq_data:
+    driver: local
+
+networks:
+  crypto_network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16

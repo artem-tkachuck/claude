@@ -1,0 +1,272 @@
+version: '3.9'
+
+x-logging: &prod-logging
+  driver: "json-file"
+  options:
+    max-size: "100m"
+    max-file: "10"
+    compress: "true"
+
+services:
+  nginx:
+    image: crypto-nginx:latest
+    container_name: crypto_nginx
+    restart: always
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./public:/var/www/public:ro
+      - ./var/log/nginx:/var/log/nginx
+      - /etc/letsencrypt:/etc/letsencrypt:ro
+      - ./ssl:/etc/nginx/ssl:ro
+    depends_on:
+      - php
+    networks:
+      - crypto_network
+    logging: *prod-logging
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 512M
+        reservations:
+          cpus: '0.5'
+          memory: 256M
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - DAC_OVERRIDE
+      - SETGID
+      - SETUID
+
+  php:
+    image: crypto-php:latest
+    container_name: crypto_php
+    restart: always
+    volumes:
+      - ./:/var/www:ro,cached
+      - ./var:/var/www/var:rw
+      - ./var/log/php:/var/log/php:rw
+    environment:
+      - APP_ENV=prod
+      - APP_DEBUG=0
+      - PHP_OPCACHE_ENABLE=1
+      - PHP_OPCACHE_VALIDATE_TIMESTAMPS=0
+    env_file:
+      - .env.prod
+    depends_on:
+      - mysql
+      - redis
+    networks:
+      - crypto_network
+    logging: *prod-logging
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 2G
+        reservations:
+          cpus: '1'
+          memory: 1G
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+
+  mysql:
+    image: mysql:8.0
+    container_name: crypto_mysql
+    restart: always
+    environment:
+      - MYSQL_ROOT_PASSWORD_FILE=/run/secrets/mysql_root_password
+      - MYSQL_DATABASE=${DB_NAME}
+      - MYSQL_USER=${DB_USER}
+      - MYSQL_PASSWORD_FILE=/run/secrets/mysql_password
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./.docker/mysql/my.cnf:/etc/mysql/conf.d/my.cnf:ro
+      - ./backup/mysql:/backup
+    networks:
+      - crypto_network
+    logging: *prod-logging
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 4G
+        reservations:
+          cpus: '1'
+          memory: 2G
+    secrets:
+      - mysql_root_password
+      - mysql_password
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - DAC_OVERRIDE
+      - SETGID
+      - SETUID
+
+  redis:
+    image: redis:7-alpine
+    container_name: crypto_redis
+    restart: always
+    command: redis-server /usr/local/etc/redis/redis.conf --requirepass ${REDIS_PASSWORD}
+    volumes:
+      - redis_data:/data
+      - ./.docker/redis/redis.conf:/usr/local/etc/redis/redis.conf:ro
+    networks:
+      - crypto_network
+    logging: *prod-logging
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 1G
+        reservations:
+          cpus: '0.5'
+          memory: 512M
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - SETGID
+      - SETUID
+
+  rabbitmq:
+    image: rabbitmq:3-management-alpine
+    container_name: crypto_rabbitmq
+    restart: always
+    hostname: crypto-rabbitmq
+    environment:
+      - RABBITMQ_DEFAULT_USER=${RABBITMQ_USER}
+      - RABBITMQ_DEFAULT_PASS_FILE=/run/secrets/rabbitmq_password
+      - RABBITMQ_VM_MEMORY_HIGH_WATERMARK=0.4
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+      - ./rabbitmq/enabled_plugins:/etc/rabbitmq/enabled_plugins
+    networks:
+      - crypto_network
+    logging: *prod-logging
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 1G
+        reservations:
+          cpus: '0.5'
+          memory: 512M
+    secrets:
+      - rabbitmq_password
+
+  messenger-consume-async:
+    image: crypto-php:latest
+    container_name: crypto_messenger_async
+    restart: always
+    command: [ "php", "bin/console", "messenger:consume", "async", "--limit=1000", "--time-limit=3600", "--memory-limit=512M" ]
+    volumes:
+      - ./:/var/www:ro,cached
+      - ./var:/var/www/var:rw
+    env_file:
+      - .env.prod
+    depends_on:
+      - mysql
+      - redis
+      - rabbitmq
+    networks:
+      - crypto_network
+    logging: *prod-logging
+    deploy:
+      mode: replicated
+      replicas: 2
+      resources:
+        limits:
+          cpus: '1'
+          memory: 512M
+        reservations:
+          cpus: '0.5'
+          memory: 256M
+
+  messenger-consume-blockchain:
+    image: crypto-php:latest
+    container_name: crypto_messenger_blockchain
+    restart: always
+    command: [ "php", "bin/console", "messenger:consume", "blockchain", "--limit=100", "--time-limit=3600", "--memory-limit=1G" ]
+    volumes:
+      - ./:/var/www:ro,cached
+      - ./var:/var/www/var:rw
+    env_file:
+      - .env.prod
+    depends_on:
+      - mysql
+      - redis
+      - rabbitmq
+    networks:
+      - crypto_network
+    logging: *prod-logging
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 1G
+        reservations:
+          cpus: '0.5'
+          memory: 512M
+
+  cron:
+    image: crypto-php:latest
+    container_name: crypto_cron
+    restart: always
+    command: [ "crond", "-f", "-l", "2" ]
+    volumes:
+      - ./:/var/www:ro,cached
+      - ./var:/var/www/var:rw
+      - ./cron.d:/etc/cron.d:ro
+    env_file:
+      - .env.prod
+    depends_on:
+      - mysql
+      - redis
+    networks:
+      - crypto_network
+    logging: *prod-logging
+
+volumes:
+  mysql_data:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: /var/crypto-platform/mysql
+  redis_data:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: /var/crypto-platform/redis
+  rabbitmq_data:
+    driver: local
+
+networks:
+  crypto_network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16
+
+secrets:
+  mysql_root_password:
+    file: ./secrets/mysql_root_password.txt
+  mysql_password:
+    file: ./secrets/mysql_password.txt
+  rabbitmq_password:
+    file: ./secrets/rabbitmq_password.txt

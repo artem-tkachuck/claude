@@ -1,0 +1,111 @@
+framework:
+  default_locale: '%env(DEFAULT_LOCALE)%'
+  translator:
+    default_path: '%kernel.project_dir%/translations'
+    fallbacks:
+      - en
+    paths:
+      - '%kernel.project_dir%/translations'
+    enabled_locales: [ 'en', 'uk', 'ru' ]
+
+    # Cache configuration
+    cache_dir: '%kernel.cache_dir%/translations'
+
+    # Translation providers (optional, for managing translations)
+    providers:
+    # Example: Crowdin integration
+    # crowdin:
+    #     dsn: '%env(CROWDIN_DSN)%'
+    #     locales: ['en', 'uk', 'ru']
+    #     domains: ['messages', 'validators', 'security']
+
+    # Example: Lokalise integration
+    # lokalise:
+    #     dsn: '%env(LOKALISE_DSN)%'
+    #     locales: ['en', 'uk', 'ru']
+    #     domains: ['messages', 'validators']
+
+    # Configure the pseudo-localization translator for development
+    pseudo_localization:
+      enabled: false
+      accents: true
+      brackets: true
+      expansion_factor: 1.2
+
+services:
+  # Locale listener to handle locale switching
+  App\EventListener\LocaleListener:
+    arguments:
+      $defaultLocale: '%env(DEFAULT_LOCALE)%'
+      $supportedLocales: '%app.supported_locales%'
+    tags:
+      - { name: kernel.event_listener, event: kernel.request, priority: 15 }
+      - { name: kernel.event_listener, event: security.interactive_login, method: onInteractiveLogin }
+
+  # Translator logger for missing translations in production
+  translation.logger:
+    class: Psr\Log\LoggerInterface
+    factory: [ '@monolog.logger.translation', 'withName' ]
+    arguments: [ 'translation' ]
+
+  # Custom translation loader for database translations
+  App\Translation\DatabaseLoader:
+    arguments:
+      - '@doctrine.orm.entity_manager'
+    tags:
+      - { name: translation.loader, alias: database }
+
+  # Translation extractor for custom sources
+  App\Translation\TelegramMessageExtractor:
+    tags:
+      - { name: translation.extractor, alias: telegram }
+
+  # Twig extensions for translations
+  App\Twig\TranslationExtension:
+    tags:
+      - { name: twig.extension }
+
+when@dev:
+  framework:
+    translator:
+      # Log missing translations
+      logging: true
+
+      # Configure paths for development
+      paths:
+        - '%kernel.project_dir%/translations'
+        - '%kernel.project_dir%/src/Resources/translations'
+
+when@test:
+  framework:
+    translator:
+      # Use array loader for tests
+      fallbacks:
+        - en
+      logging: false
+
+when@prod:
+  framework:
+    translator:
+      # Disable logging in production for performance
+      logging: false
+
+      # Enable caching
+      cache:
+        pools:
+          - cache.app
+
+      # Configure resource files
+      resource_files:
+        en:
+          - '%kernel.project_dir%/translations/messages.en.yaml'
+          - '%kernel.project_dir%/translations/validators.en.yaml'
+          - '%kernel.project_dir%/translations/security.en.yaml'
+        uk:
+          - '%kernel.project_dir%/translations/messages.uk.yaml'
+          - '%kernel.project_dir%/translations/validators.uk.yaml'
+          - '%kernel.project_dir%/translations/security.uk.yaml'
+        ru:
+          - '%kernel.project_dir%/translations/messages.ru.yaml'
+          - '%kernel.project_dir%/translations/validators.ru.yaml'
+          - '%kernel.project_dir%/translations/security.ru.yaml'

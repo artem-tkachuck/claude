@@ -1,0 +1,158 @@
+# API Routes Configuration
+
+# Authentication endpoints
+api_auth:
+  path: /api/auth/telegram
+  controller: App\Controller\Api\AuthController::telegramAuth
+  methods: POST
+
+api_refresh_token:
+  path: /api/auth/refresh
+  controller: App\Controller\Api\AuthController::refresh
+  methods: POST
+
+api_logout:
+  path: /api/auth/logout
+  controller: App\Controller\Api\AuthController::logout
+  methods: POST
+
+# User profile endpoints
+api_profile:
+  path: /api/profile
+  controller: App\Controller\Api\ProfileController::index
+  methods: GET
+
+api_profile_update:
+  path: /api/profile
+  controller: App\Controller\Api\ProfileController::update
+  methods: [ PUT, PATCH ]
+
+api_profile_2fa:
+  path: /api/profile/2fa
+  controller: App\Controller\Api\ProfileController::twoFactor
+  methods: POST
+
+api_profile_2fa_verify:
+  path: /api/profile/2fa/verify
+  controller: App\Controller\Api\ProfileController::verifyTwoFactor
+  methods: POST
+
+# Balance endpoints
+api_balance:
+  path: /api/balance
+  controller: App\Controller\Api\BalanceController::index
+  methods: GET
+
+api_balance_history:
+  path: /api/balance/history
+  controller: App\Controller\Api\BalanceController::history
+  methods: GET
+
+# Deposit endpoints
+api_deposit_address:
+  path: /api/deposit/address
+  controller: App\Controller\Api\DepositController::getAddress
+  methods: GET
+
+api_deposit_create:
+  path: /api/deposit
+  controller: App\Controller\Api\DepositController::create
+  methods: POST
+
+api_deposit_check:
+  path: /api/deposit/{hash}/check
+  controller: App\Controller\Api\DepositController::check
+  methods: GET
+  requirements:
+    hash: '[a-fA-F0-9]{64}'
+
+api_deposit_list:
+  path: /api/deposits
+  controller: App\Controller\Api\DepositController::list
+  methods: GET
+
+# Withdrawal endpoints
+api_withdrawal_create:
+  path: /api/withdrawal
+  controller: App\Controller\Api\WithdrawalController::create
+  methods: POST
+
+api_withdrawal_confirm:
+  path: /api/withdrawal/{id}/confirm
+  controller: App\Controller\Api\WithdrawalController::confirm
+  methods: POST
+  requirements:
+    id: '\d+'
+
+api_withdrawal_cancel:
+  path: /api/withdrawal/{id}/cancel
+  controller: App\Controller\Api\WithdrawalController::cancel
+  methods: POST
+  requirements:
+    id: '\d+'
+
+api_withdrawal_list:
+  path: /api/withdrawals
+  controller: App\Controller\Api\WithdrawalController::list
+  methods: GET
+
+api_withdrawal_limits:
+  path: /api/withdrawal/limits
+  controller: App\Controller\Api\WithdrawalController::limits
+  methods: GET
+
+# Transaction endpoints
+api_transaction_list:
+  path: /api/transactions
+  controller: App\Controller\Api\TransactionController::list
+  methods: GET
+
+api_transaction_show:
+  path: /api/transaction/{id}
+  controller: App\Controller\Api\TransactionController::show
+  methods: GET
+  requirements:
+    id: '\d+'
+
+api_transaction_export:
+  path: /api/transactions/export
+  controller: App\Controller\Api\TransactionController::export
+  methods: GET
+
+# Referral endpoints
+api_referral_info:
+  path: /api/referral
+  controller: App\Controller\Api\ReferralController::info
+  methods: GET
+
+api_referral_list:
+  path: /api/referral/list
+  controller: App\Controller\Api\ReferralController::list
+  methods: GET
+
+api_referral_stats:
+  path: /api/referral/stats
+  controller: App\Controller\Api\ReferralController::stats
+  methods: GET
+
+# Health check endpoint
+api_health:
+  path: /api/health
+  controller: App\Controller\Api\HealthController::check
+  methods: GET
+
+api_health_detailed:
+  path: /api/health/detailed
+  controller: App\Controller\Api\HealthController::detailed
+  methods: GET
+
+# Public endpoints (no auth required)
+api_public_stats:
+  path: /api/public/stats
+  controller: App\Controller\Api\PublicController::stats
+  methods: GET
+
+api_public_rates:
+  path: /api/public/rates
+  controller: App\Controller\Api\PublicController::rates
+  methods: GET

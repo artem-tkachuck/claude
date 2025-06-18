@@ -1,0 +1,85 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!-- https://phpunit.readthedocs.io/en/latest/configuration.html -->
+<phpunit xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:noNamespaceSchemaLocation="vendor/phpunit/phpunit/phpunit.xsd"
+         backupGlobals="false"
+         colors="true"
+         bootstrap="tests/bootstrap.php"
+         convertDeprecationsToExceptions="false"
+>
+    <php>
+        <ini name="display_errors" value="1"/>
+        <ini name="error_reporting" value="-1"/>
+        <server name="APP_ENV" value="test" force="true"/>
+        <server name="SHELL_VERBOSITY" value="-1"/>
+        <server name="SYMFONY_PHPUNIT_REMOVE" value=""/>
+        <server name="SYMFONY_PHPUNIT_VERSION" value="10.5"/>
+        <server name="KERNEL_CLASS" value="App\Kernel"/>
+
+        <!-- Database for tests -->
+        <env name="DATABASE_URL" value="mysql://root:root@127.0.0.1:3306/crypto_test?serverVersion=8.0"/>
+
+        <!-- Redis for tests -->
+        <env name="REDIS_URL" value="redis://localhost:6379"/>
+
+        <!-- Messenger for tests -->
+        <env name="MESSENGER_TRANSPORT_DSN" value="in-memory://"/>
+
+        <!-- Disable debug -->
+        <env name="APP_DEBUG" value="0"/>
+
+        <!-- Test configuration -->
+        <env name="TELEGRAM_BOT_TOKEN" value="test_token"/>
+        <env name="TELEGRAM_BOT_USERNAME" value="test_bot"/>
+        <env name="TRON_API_KEY" value="test_api_key"/>
+        <env name="HOT_WALLET_ADDRESS" value="TTestHotWalletAddress123"/>
+        <env name="COLD_WALLET_ADDRESS" value="TTestColdWalletAddress123"/>
+    </php>
+
+    <testsuites>
+        <testsuite name="Unit">
+            <directory>tests/Unit</directory>
+        </testsuite>
+        <testsuite name="Integration">
+            <directory>tests/Integration</directory>
+        </testsuite>
+        <testsuite name="Functional">
+            <directory>tests/Functional</directory>
+        </testsuite>
+        <testsuite name="All">
+            <directory>tests</directory>
+        </testsuite>
+    </testsuites>
+
+    <coverage includeUncoveredFiles="true"
+              pathCoverage="false"
+              ignoreDeprecatedCodeUnits="true"
+              disableCodeCoverageIgnore="true">
+        <include>
+            <directory suffix=".php">src</directory>
+        </include>
+        <exclude>
+            <directory>src/DataFixtures</directory>
+            <file>src/Kernel.php</file>
+        </exclude>
+        <report>
+            <html outputDirectory="var/coverage/html" lowUpperBound="50" highLowerBound="90"/>
+            <text outputFile="var/coverage/coverage.txt" showOnlySummary="true"/>
+            <clover outputFile="var/coverage/clover.xml"/>
+        </report>
+    </coverage>
+
+    <listeners>
+        <listener class="Symfony\Bridge\PhpUnit\SymfonyTestsListener"/>
+    </listeners>
+
+    <extensions>
+        <extension class="DAMA\DoctrineTestBundle\PHPUnit\PHPUnitExtension"/>
+    </extensions>
+
+    <!-- Speed up tests by reducing password hashing rounds -->
+    <php>
+        <env name="SYMFONY_DEPRECATIONS_HELPER" value="weak"/>
+    </php>
+</phpunit>

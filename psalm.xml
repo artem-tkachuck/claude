@@ -1,0 +1,67 @@
+<?xml version="1.0"?>
+<psalm
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        errorLevel="3"
+        resolveFromConfigFile="true"
+        xmlns="https://getpsalm.org/schema/config"
+        xsi:schemaLocation="https://getpsalm.org/schema/config vendor/vimeo/psalm/config.xsd"
+        findUnusedBaselineEntry="true"
+        findUnusedCode="true"
+>
+    <projectFiles>
+        <directory name="src"/>
+        <ignoreFiles>
+            <directory name="vendor"/>
+            <directory name="var"/>
+            <file name="src/Kernel.php"/>
+        </ignoreFiles>
+    </projectFiles>
+
+    <issueHandlers>
+        <LessSpecificReturnType errorLevel="info"/>
+        <DeprecatedMethod errorLevel="info"/>
+        <DeprecatedProperty errorLevel="info"/>
+        <DeprecatedClass errorLevel="info"/>
+        <DeprecatedConstant errorLevel="info"/>
+        <DeprecatedFunction errorLevel="info"/>
+        <DeprecatedInterface errorLevel="info"/>
+        <DeprecatedTrait errorLevel="info"/>
+        <InternalMethod errorLevel="info"/>
+        <InternalProperty errorLevel="info"/>
+        <InternalClass errorLevel="info"/>
+        <MissingClosureReturnType errorLevel="info"/>
+        <MissingReturnType errorLevel="info"/>
+        <MissingPropertyType errorLevel="info"/>
+        <InvalidDocblock errorLevel="info"/>
+        <MisplacedRequiredParam errorLevel="info"/>
+        <PropertyNotSetInConstructor errorLevel="info"/>
+        <MissingConstructor errorLevel="info"/>
+        <MissingParamType errorLevel="info"/>
+        <RedundantCondition errorLevel="info"/>
+        <DocblockTypeContradiction errorLevel="info"/>
+        <RedundantConditionGivenDocblockType errorLevel="info"/>
+        <UnresolvableInclude errorLevel="info"/>
+        <RawObjectIteration errorLevel="info"/>
+        <InvalidStringClass errorLevel="info"/>
+        <PossiblyUndefinedMethod errorLevel="info"/>
+        <PossiblyUndefinedVariable errorLevel="error"/>
+        <NonStaticSelfCall errorLevel="error"/>
+        <UnusedVariable errorLevel="error"/>
+        <UnusedParam errorLevel="info"/>
+        <UnusedProperty errorLevel="info"/>
+        <UnusedClass errorLevel="info"/>
+        <UnusedMethod errorLevel="info"/>
+        <PossiblyUnusedMethod errorLevel="info"/>
+        <PossiblyUnusedProperty errorLevel="info"/>
+        <PossiblyUnusedParam errorLevel="info"/>
+    </issueHandlers>
+
+    <plugins>
+        <pluginClass class="Psalm\SymfonyPsalmPlugin\Plugin"/>
+    </plugins>
+
+    <stubs>
+        <file name="vendor/symfony/symfony/src/Symfony/Component/HttpFoundation/Request.php"/>
+        <file name="vendor/symfony/symfony/src/Symfony/Component/HttpFoundation/Response.php"/>
+    </stubs>
+</psalm>

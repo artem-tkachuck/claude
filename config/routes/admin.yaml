@@ -1,0 +1,267 @@
+# Admin Routes Configuration
+
+# Admin authentication
+admin_login:
+  path: /admin/login
+  controller: App\Controller\SecurityController::adminLogin
+  methods: [ GET, POST ]
+
+admin_logout:
+  path: /admin/logout
+  controller: App\Controller\SecurityController::adminLogout
+  methods: POST
+
+admin_2fa:
+  path: /admin/2fa
+  controller: App\Controller\SecurityController::twoFactorAuth
+  methods: [ GET, POST ]
+
+# Admin dashboard
+admin_dashboard:
+  path: /admin
+  controller: App\Controller\Admin\DashboardController::index
+  methods: GET
+
+admin_dashboard_stats:
+  path: /admin/stats
+  controller: App\Controller\Admin\DashboardController::stats
+  methods: GET
+
+# User management
+admin_users:
+  path: /admin/users
+  controller: App\Controller\Admin\UserController::index
+  methods: GET
+
+admin_user_show:
+  path: /admin/user/{id}
+  controller: App\Controller\Admin\UserController::show
+  methods: GET
+  requirements:
+    id: '\d+'
+
+admin_user_edit:
+  path: /admin/user/{id}/edit
+  controller: App\Controller\Admin\UserController::edit
+  methods: [ GET, POST ]
+  requirements:
+    id: '\d+'
+
+admin_user_block:
+  path: /admin/user/{id}/block
+  controller: App\Controller\Admin\UserController::block
+  methods: POST
+  requirements:
+    id: '\d+'
+
+admin_user_unblock:
+  path: /admin/user/{id}/unblock
+  controller: App\Controller\Admin\UserController::unblock
+  methods: POST
+  requirements:
+    id: '\d+'
+
+admin_user_reset_2fa:
+  path: /admin/user/{id}/reset-2fa
+  controller: App\Controller\Admin\UserController::resetTwoFactor
+  methods: POST
+  requirements:
+    id: '\d+'
+
+admin_user_transactions:
+  path: /admin/user/{id}/transactions
+  controller: App\Controller\Admin\UserController::transactions
+  methods: GET
+  requirements:
+    id: '\d+'
+
+# Transaction management
+admin_transactions:
+  path: /admin/transactions
+  controller: App\Controller\Admin\TransactionController::index
+  methods: GET
+
+admin_transaction_show:
+  path: /admin/transaction/{id}
+  controller: App\Controller\Admin\TransactionController::show
+  methods: GET
+  requirements:
+    id: '\d+'
+
+# Deposit management
+admin_deposits:
+  path: /admin/deposits
+  controller: App\Controller\Admin\DepositController::index
+  methods: GET
+
+admin_deposit_show:
+  path: /admin/deposit/{id}
+  controller: App\Controller\Admin\DepositController::show
+  methods: GET
+  requirements:
+    id: '\d+'
+
+admin_deposit_confirm:
+  path: /admin/deposit/{id}/confirm
+  controller: App\Controller\Admin\DepositController::confirm
+  methods: POST
+  requirements:
+    id: '\d+'
+
+# Withdrawal management
+admin_withdrawals:
+  path: /admin/withdrawals
+  controller: App\Controller\Admin\WithdrawalController::index
+  methods: GET
+
+admin_withdrawal_show:
+  path: /admin/withdrawal/{id}
+  controller: App\Controller\Admin\WithdrawalController::show
+  methods: GET
+  requirements:
+    id: '\d+'
+
+admin_withdrawal_approve:
+  path: /admin/withdrawal/{id}/approve
+  controller: App\Controller\Admin\WithdrawalController::approve
+  methods: POST
+  requirements:
+    id: '\d+'
+
+admin_withdrawal_reject:
+  path: /admin/withdrawal/{id}/reject
+  controller: App\Controller\Admin\WithdrawalController::reject
+  methods: POST
+  requirements:
+    id: '\d+'
+
+admin_withdrawal_process:
+  path: /admin/withdrawal/{id}/process
+  controller: App\Controller\Admin\WithdrawalController::process
+  methods: POST
+  requirements:
+    id: '\d+'
+
+# Bonus management
+admin_bonuses:
+  path: /admin/bonuses
+  controller: App\Controller\Admin\BonusController::index
+  methods: GET
+
+admin_bonus_calculate:
+  path: /admin/bonus/calculate
+  controller: App\Controller\Admin\BonusController::calculate
+  methods: [ GET, POST ]
+
+admin_bonus_distribute:
+  path: /admin/bonus/distribute
+  controller: App\Controller\Admin\BonusController::distribute
+  methods: POST
+
+admin_bonus_history:
+  path: /admin/bonus/history
+  controller: App\Controller\Admin\BonusController::history
+  methods: GET
+
+# Security & logs
+admin_security_logs:
+  path: /admin/security/logs
+  controller: App\Controller\Admin\SecurityController::logs
+  methods: GET
+
+admin_security_sessions:
+  path: /admin/security/sessions
+  controller: App\Controller\Admin\SecurityController::sessions
+  methods: GET
+
+admin_security_blocked_ips:
+  path: /admin/security/blocked-ips
+  controller: App\Controller\Admin\SecurityController::blockedIps
+  methods: GET
+
+admin_security_block_ip:
+  path: /admin/security/block-ip
+  controller: App\Controller\Admin\SecurityController::blockIp
+  methods: POST
+
+admin_security_unblock_ip:
+  path: /admin/security/unblock-ip/{ip}
+  controller: App\Controller\Admin\SecurityController::unblockIp
+  methods: POST
+  requirements:
+    ip: '.+'
+
+# System settings
+admin_settings:
+  path: /admin/settings
+  controller: App\Controller\Admin\SettingsController::index
+  methods: [ GET, POST ]
+
+admin_settings_general:
+  path: /admin/settings/general
+  controller: App\Controller\Admin\SettingsController::general
+  methods: [ GET, POST ]
+
+admin_settings_blockchain:
+  path: /admin/settings/blockchain
+  controller: App\Controller\Admin\SettingsController::blockchain
+  methods: [ GET, POST ]
+
+admin_settings_bonus:
+  path: /admin/settings/bonus
+  controller: App\Controller\Admin\SettingsController::bonus
+  methods: [ GET, POST ]
+
+admin_settings_referral:
+  path: /admin/settings/referral
+  controller: App\Controller\Admin\SettingsController::referral
+  methods: [ GET, POST ]
+
+admin_settings_security:
+  path: /admin/settings/security
+  controller: App\Controller\Admin\SettingsController::security
+  methods: [ GET, POST ]
+
+admin_settings_telegram:
+  path: /admin/settings/telegram
+  controller: App\Controller\Admin\SettingsController::telegram
+  methods: [ GET, POST ]
+
+# Reports
+admin_reports:
+  path: /admin/reports
+  controller: App\Controller\Admin\ReportController::index
+  methods: GET
+
+admin_report_generate:
+  path: /admin/report/generate
+  controller: App\Controller\Admin\ReportController::generate
+  methods: POST
+
+admin_report_download:
+  path: /admin/report/download/{id}
+  controller: App\Controller\Admin\ReportController::download
+  methods: GET
+  requirements:
+    id: '\d+'
+
+# Maintenance
+admin_maintenance:
+  path: /admin/maintenance
+  controller: App\Controller\Admin\MaintenanceController::index
+  methods: [ GET, POST ]
+
+admin_maintenance_toggle:
+  path: /admin/maintenance/toggle
+  controller: App\Controller\Admin\MaintenanceController::toggle
+  methods: POST
+
+admin_cache_clear:
+  path: /admin/cache/clear
+  controller: App\Controller\Admin\MaintenanceController::clearCache
+  methods: POST
+
+admin_backup:
+  path: /admin/backup
+  controller: App\Controller\Admin\MaintenanceController::backup
+  methods: POST

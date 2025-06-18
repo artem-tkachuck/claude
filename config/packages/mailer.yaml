@@ -1,0 +1,94 @@
+framework:
+  mailer:
+    # DSN for mail server connection
+    dsn: '%env(MAILER_DSN)%'
+
+    # Default envelope configuration
+    envelope:
+      sender: '%env(MAILER_FROM)%'
+      recipients: [ ]
+
+    # Default headers
+    headers:
+      From: '%env(MAILER_FROM_NAME)% <%env(MAILER_FROM)%>'
+      Reply-To: '%env(MAILER_REPLY_TO)%'
+      X-Mailer: 'Crypto Investment Platform'
+      X-Priority: '3'
+
+    # Message bus for async email sending
+    message_bus: 'messenger.default_bus'
+
+# Email-specific services
+services:
+  # Email builder service
+  App\Service\Email\EmailBuilder:
+    arguments:
+      - '@twig'
+      - '@translator'
+      - '@router'
+      - '%env(APP_URL)%'
+      - '%env(APP_NAME)%'
+
+  # Email notification service
+  App\Service\Notification\EmailNotifier:
+    arguments:
+      - '@mailer'
+      - '@App\Service\Email\EmailBuilder'
+      - '@translator'
+      - '@logger'
+      - '%env(MAILER_FROM)%'
+      - '%env(ADMIN_EMAIL)%'
+    tags:
+      - { name: monolog.logger, channel: email }
+
+  # Email template renderer
+  App\Service\Email\EmailTemplateRenderer:
+    arguments:
+      - '@twig'
+      - '@translator'
+      - '@App\Service\Crypto\CryptoFormatter'
+
+  # Email validator
+  App\Service\Email\EmailValidator:
+    arguments:
+      - '@App\Service\Security\AntiFraudService'
+      - '%app.security_config.blocked_email_domains%'
+
+  # Transactional email sender
+  App\Service\Email\TransactionalEmailSender:
+    decorates: 'mailer'
+    decoration_inner_name: 'App\Service\Email\TransactionalEmailSender.inner'
+    arguments:
+      - '@App\Service\Email\TransactionalEmailSender.inner'
+      - '@logger'
+      - '@App\Service\Monitoring\MetricsCollector'
+
+when@dev:
+  framework:
+    mailer:
+      dsn: '%env(MAILER_DSN)%'
+      envelope:
+        recipients: [ '%env(DEV_EMAIL)%' ]
+
+      # Add dev headers
+      headers:
+        X-Environment: 'development'
+        X-Debug: 'true'
+
+when@test:
+  framework:
+    mailer:
+      dsn: 'null://null'
+
+when@prod:
+  framework:
+    mailer:
+      dsn: '%env(MAILER_DSN)%'
+
+      # Production headers
+      headers:
+        From: '%env(MAILER_FROM_NAME)% <%env(MAILER_FROM)%>'
+        Reply-To: '%env(MAILER_REPLY_TO)%'
+        X-Mailer: 'Crypto Investment Platform'
+        X-Priority: '3'
+        List-Unsubscribe: '<%env(APP_URL)%/unsubscribe>'

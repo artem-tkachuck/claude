@@ -1,0 +1,71 @@
+doctrine_migrations:
+  # Directory where migration classes are stored
+  migrations_paths:
+    'DoctrineMigrations': '%kernel.project_dir%/migrations'
+
+  # Storage configuration
+  storage:
+    # Table name for migration versions
+    table_storage:
+      table_name: 'doctrine_migration_versions'
+      version_column_name: 'version'
+      version_column_length: 1024
+      executed_at_column_name: 'executed_at'
+      execution_time_column_name: 'execution_time'
+
+  # All migrations configuration
+  all_or_nothing: true
+
+  # Check database platform in migration
+  check_database_platform: true
+
+  # Organize migrations by year and month
+  organize_migrations: 'BY_YEAR_AND_MONTH'
+
+  # Custom migration template
+  custom_template: '%kernel.project_dir%/config/doctrine/migration_template.tpl'
+
+  # Services
+  services:
+    'Doctrine\Migrations\Version\MigrationFactory': 'App\Doctrine\Migrations\Factory\MigrationFactoryDecorator'
+
+  # Dependency injection for migrations
+  dependency_factory: 'doctrine.migrations.dependency_factory'
+
+  # Enable profiler logging
+  enable_profiler: '%kernel.debug%'
+
+  # Metadata storage configuration
+  metadata_storage:
+    type: 'table'
+
+  # Migrations configuration
+  migrations:
+    # Migration namespace
+    'DoctrineMigrations':
+      # Directory path
+      directory: '%kernel.project_dir%/migrations'
+      # Namespace
+      namespace: 'DoctrineMigrations'
+      # Sort by version number
+      version_sort: 'version_number'
+
+when@dev:
+  doctrine_migrations:
+    # Be more lenient in development
+    all_or_nothing: false
+    check_database_platform: false
+
+when@test:
+  doctrine_migrations:
+    # Use in-memory SQLite for tests
+    storage:
+      table_storage:
+        table_name: 'test_migration_versions'
+
+when@prod:
+  doctrine_migrations:
+    # Strict settings for production
+    all_or_nothing: true
+    check_database_platform: true
+    transactional: true

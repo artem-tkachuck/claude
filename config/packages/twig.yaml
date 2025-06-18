@@ -1,0 +1,135 @@
+twig:
+  # Default path for templates
+  default_path: '%kernel.project_dir%/templates'
+
+  # Enable debug mode
+  debug: '%kernel.debug%'
+
+  # Strict variables (throw exception on undefined variables)
+  strict_variables: '%kernel.debug%'
+
+  # Form themes
+  form_themes:
+    - 'bootstrap_5_layout.html.twig'
+    - 'form/custom_types.html.twig'
+
+  # Global variables available in all templates
+  globals:
+    app_name: '%env(APP_NAME)%'
+    app_version: '%env(APP_VERSION)%'
+    support_email: '%env(SUPPORT_EMAIL)%'
+    support_telegram: '%env(SUPPORT_TELEGRAM)%'
+    min_deposit: '%env(float:MINIMUM_DEPOSIT_AMOUNT)%'
+    min_withdrawal: '%app.withdrawal_config.min_amount%'
+    withdrawal_fee: '%app.withdrawal_config.fee_percentage%'
+    referral_levels: '%app.referral_config.max_levels%'
+    referral_level_1: '%app.referral_config.level_1%'
+    referral_level_2: '%app.referral_config.level_2%'
+    supported_locales: '%app.supported_locales%'
+    telegram_bot_username: '%env(TELEGRAM_BOT_USERNAME)%'
+
+  # Paths for additional template directories
+  paths:
+    '%kernel.project_dir%/templates': ~
+    '%kernel.project_dir%/templates/emails': 'email'
+    '%kernel.project_dir%/templates/admin': 'admin'
+
+  # Date format
+  date:
+    format: 'd/m/Y'
+    interval_format: '%d days'
+    timezone: '%env(TIMEZONE)%'
+
+  # Number format
+  number_format:
+    decimals: 8
+    decimal_point: '.'
+    thousands_separator: ','
+
+  # Auto-escaping strategy
+  autoescape: name
+
+  # Cache configuration
+  cache: '%kernel.cache_dir%/twig'
+
+  # Auto reload templates
+  auto_reload: '%kernel.debug%'
+
+  # Exception controller
+  exception_controller: null
+
+# Twig extensions and runtime services
+services:
+  # Custom Twig extensions
+  App\Twig\AppExtension:
+    tags: [ 'twig.extension' ]
+
+  App\Twig\SecurityExtension:
+    arguments:
+      - '@security.authorization_checker'
+      - '@security.token_storage'
+    tags: [ 'twig.extension' ]
+
+  App\Twig\TranslationExtension:
+    arguments:
+      - '@translator'
+    tags: [ 'twig.extension' ]
+
+  App\Twig\CryptoExtension:
+    arguments:
+      - '@App\Service\Crypto\CryptoFormatter'
+    tags: [ 'twig.extension' ]
+
+  App\Twig\DateExtension:
+    arguments:
+      - '@translator'
+      - '%env(TIMEZONE)%'
+    tags: [ 'twig.extension' ]
+
+  App\Twig\UserExtension:
+    arguments:
+      - '@App\Repository\UserRepository'
+    tags: [ 'twig.extension' ]
+
+  # Twig runtime services
+  App\Twig\Runtime\CryptoRuntime:
+    arguments:
+      - '@App\Service\Blockchain\BlockchainServiceInterface'
+      - '@App\Service\Crypto\CryptoFormatter'
+    tags: [ 'twig.runtime' ]
+
+  App\Twig\Runtime\SecurityRuntime:
+    arguments:
+      - '@App\Service\Security\TwoFactorService'
+      - '@security.csrf.token_manager'
+    tags: [ 'twig.runtime' ]
+
+  # Form theme customization
+  App\Form\Extension\FormTypeExtension:
+    tags:
+      - { name: form.type_extension, extended_type: Symfony\Component\Form\Extension\Core\Type\FormType }
+
+when@dev:
+  twig:
+    # Show source code in exception pages
+    debug: true
+    strict_variables: true
+    cache: false
+
+when@test:
+  twig:
+    strict_variables: true
+    cache: false
+
+when@prod:
+  twig:
+    # Optimize for production
+    debug: false
+    strict_variables: false
+    auto_reload: false
+
+    # Production cache
+    cache: '%kernel.cache_dir%/twig'
+
+    # Optimizations
+    optimizations: -1

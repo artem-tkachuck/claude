@@ -1,0 +1,52 @@
+parameters:
+    level: 8
+    paths:
+        - src
+        - tests
+    excludePaths:
+        - src/Kernel.php
+        - src/DataFixtures
+    tmpDir: var/phpstan
+    resultCachePath: var/phpstan/resultCache.php
+
+    symfony:
+        container_xml_path: var/cache/dev/App_KernelDevDebugContainer.xml
+        console_application_loader: tests/phpstan/console-loader.php
+
+    doctrine:
+        repositoryClass: App\Repository\BaseRepository
+
+    checkMissingIterableValueType: false
+    checkGenericClassInNonGenericObjectType: false
+    reportUnmatchedIgnoredErrors: true
+    treatPhpDocTypesAsCertain: false
+
+    ignoreErrors:
+        # Ignore some Symfony-specific patterns
+        - '#Call to an undefined method Symfony\\Component\\HttpFoundation\\Response::#'
+        - '#Call to an undefined method Symfony\\Contracts\\EventDispatcher\\EventDispatcherInterface::#'
+
+        # Ignore Doctrine repository magic methods
+        - '#Call to an undefined method App\\Repository\\[a-zA-Z]+Repository::findOneBy[A-Z][a-zA-Z]+\(\)#'
+        - '#Call to an undefined method App\\Repository\\[a-zA-Z]+Repository::findBy[A-Z][a-zA-Z]+\(\)#'
+
+        # Ignore translation parameters
+        - '#Parameter \#2 \$parameters of method Symfony\\Contracts\\Translation\\TranslatorInterface::trans\(\) expects array#'
+
+        # Ignore test-specific issues
+        -
+            message: '#Property .* is never written, only read#'
+            paths:
+                - tests/*
+
+    scanFiles:
+        - vendor/symfony/symfony/src/Symfony/Component/HttpFoundation/Request.php
+        - vendor/symfony/symfony/src/Symfony/Component/HttpFoundation/Response.php
+
+    scanDirectories:
+        - vendor/symfony
+
+includes:
+    - vendor/phpstan/phpstan-doctrine/extension.neon
+    - vendor/phpstan/phpstan-symfony/extension.neon
+    - vendor/phpstan/phpstan-phpunit/extension.neon

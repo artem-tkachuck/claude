@@ -1,0 +1,284 @@
+framework:
+  rate_limiter:
+    # General API rate limiter
+    api:
+      policy: 'sliding_window'
+      limit: 100
+      interval: '1 minute'
+      lock_factory: 'lock.api.factory'
+      storage: 'cache.rate_limiter'
+
+    # Strict rate limiter for API write operations
+    api_write:
+      policy: 'token_bucket'
+      limit: 20
+      rate: { amount: 20, interval: '1 minute' }
+      lock_factory: 'lock.api.factory'
+      storage: 'cache.rate_limiter'
+
+    # Authentication/login attempts
+    login:
+      policy: 'fixed_window'
+      limit: 5
+      interval: '15 minutes'
+      lock_factory: 'lock.auth.factory'
+      storage: 'cache.security'
+
+    # Password reset attempts
+    password_reset:
+      policy: 'fixed_window'
+      limit: 3
+      interval: '1 hour'
+      lock_factory: 'lock.auth.factory'
+      storage: 'cache.security'
+
+    # 2FA verification attempts
+    two_factor:
+      policy: 'fixed_window'
+      limit: 5
+      interval: '15 minutes'
+      lock_factory: 'lock.auth.factory'
+      storage: 'cache.security'
+
+    # Telegram bot commands
+    telegram_commands:
+      policy: 'sliding_window'
+      limit: 30
+      interval: '1 minute'
+      lock_factory: 'lock.telegram.factory'
+      storage: 'cache.telegram'
+
+    # Telegram webhook (higher limit)
+    telegram_webhook:
+      policy: 'sliding_window'
+      limit: 1000
+      interval: '1 minute'
+      lock_factory: 'lock.telegram.factory'
+      storage: 'cache.telegram'
+
+    # Deposit operations
+    deposit_create:
+      policy: 'token_bucket'
+      limit: 10
+      rate: { amount: 10, interval: '1 hour' }
+      lock_factory: 'lock.transaction.factory'
+      storage: 'cache.rate_limiter'
+
+    # Deposit status checks
+    deposit_check:
+      policy: 'sliding_window'
+      limit: 60
+      interval: '1 minute'
+      lock_factory: 'lock.transaction.factory'
+      storage: 'cache.rate_limiter'
+
+    # Withdrawal requests
+    withdrawal_create:
+      policy: 'token_bucket'
+      limit: 5
+      rate: { amount: 5, interval: '24 hours' }
+      lock_factory: 'lock.transaction.factory'
+      storage: 'cache.rate_limiter'
+
+    # Daily withdrawal amount limit (in USDT)
+    withdrawal_amount:
+      policy: 'fixed_window'
+      limit: '%env(float:WITHDRAWAL_DAILY_LIMIT)%'
+      interval: '24 hours'
+      lock_factory: 'lock.transaction.factory'
+      storage: 'cache.rate_limiter'
+
+    # Admin operations
+    admin_action:
+      policy: 'sliding_window'
+      limit: 100
+      interval: '1 minute'
+      lock_factory: 'lock.admin.factory'
+      storage: 'cache.rate_limiter'
+
+    # Critical admin operations (user blocking, large withdrawals)
+    admin_critical:
+      policy: 'token_bucket'
+      limit: 10
+      rate: { amount: 10, interval: '1 hour' }
+      lock_factory: 'lock.admin.factory'
+      storage: 'cache.security'
+
+    # Email sending
+    email:
+      policy: 'token_bucket'
+      limit: 50
+      rate: { amount: 50, interval: '1 hour' }
+      lock_factory: 'lock.email.factory'
+      storage: 'cache.rate_limiter'
+
+    # SMS/Phone notifications
+    sms:
+      policy: 'fixed_window'
+      limit: 10
+      interval: '1 hour'
+      lock_factory: 'lock.notification.factory'
+      storage: 'cache.rate_limiter'
+
+    # Blockchain API calls
+    blockchain_api:
+      policy: 'sliding_window'
+      limit: 300
+      interval: '1 minute'
+      lock_factory: 'lock.blockchain.factory'
+      storage: 'cache.blockchain'
+
+    # Report generation
+    report_generate:
+      policy: 'fixed_window'
+      limit: 5
+      interval: '1 hour'
+      lock_factory: 'lock.report.factory'
+      storage: 'cache.rate_limiter'
+
+    # User registration
+    registration:
+      policy: 'fixed_window'
+      limit: 10
+      interval: '1 hour'
+      lock_factory: 'lock.registration.factory'
+      storage: 'cache.security'
+
+    # Referral link usage
+    referral:
+      policy: 'sliding_window'
+      limit: 100
+      interval: '1 hour'
+      lock_factory: 'lock.referral.factory'
+      storage: 'cache.rate_limiter'
+
+# Services configuration
+services:
+  # Lock factories for different components
+  lock.api.factory:
+    class: Symfony\Component\Lock\LockFactory
+    arguments:
+      - '@lock.api.store'
+
+  lock.api.store:
+    class: Symfony\Component\Lock\Store\RedisStore
+    arguments:
+      - '@Redis'
+      - { prefix: 'api_lock_' }
+
+  lock.auth.factory:
+    class: Symfony\Component\Lock\LockFactory
+    arguments:
+      - '@lock.auth.store'
+
+  lock.auth.store:
+    class: Symfony\Component\Lock\Store\RedisStore
+    arguments:
+      - '@Redis'
+      - { prefix: 'auth_lock_' }
+
+  lock.telegram.factory:
+    class: Symfony\Component\Lock\LockFactory
+    arguments:
+      - '@lock.telegram.store'
+
+  lock.telegram.store:
+    class: Symfony\Component\Lock\Store\RedisStore
+    arguments:
+      - '@Redis'
+      - { prefix: 'telegram_lock_' }
+
+  lock.transaction.factory:
+    class: Symfony\Component\Lock\LockFactory
+    arguments:
+      - '@lock.transaction.store'
+
+  lock.transaction.store:
+    class: Symfony\Component\Lock\Store\RedisStore
+    arguments:
+      - '@Redis'
+      - { prefix: 'transaction_lock_' }
+
+  lock.admin.factory:
+    class: Symfony\Component\Lock\LockFactory
+    arguments:
+      - '@lock.admin.store'
+
+  lock.admin.store:
+    class: Symfony\Component\Lock\Store\RedisStore
+    arguments:
+      - '@Redis'
+      - { prefix: 'admin_lock_' }
+
+  lock.blockchain.factory:
+    class: Symfony\Component\Lock\LockFactory
+    arguments:
+      - '@lock.blockchain.store'
+
+  lock.blockchain.store:
+    class: Symfony\Component\Lock\Store\RedisStore
+    arguments:
+      - '@Redis'
+      - { prefix: 'blockchain_lock_' }
+
+  lock.email.factory:
+    class: Symfony\Component\Lock\LockFactory
+    arguments:
+      - '@lock.email.store'
+
+  lock.email.store:
+    class: Symfony\Component\Lock\Store\RedisStore
+    arguments:
+      - '@Redis'
+      - { prefix: 'email_lock_' }
+
+  lock.notification.factory:
+    class: Symfony\Component\Lock\LockFactory
+    arguments:
+      - '@lock.notification.store'
+
+  lock.notification.store:
+    class: Symfony\Component\Lock\Store\RedisStore
+    arguments:
+      - '@Redis'
+      - { prefix: 'notification_lock_' }
+
+  lock.report.factory:
+    class: Symfony\Component\Lock\LockFactory
+    arguments:
+      - '@lock.report.store'
+
+  lock.report.store:
+    class: Symfony\Component\Lock\Store\RedisStore
+    arguments:
+      - '@Redis'
+      - { prefix: 'report_lock_' }
+
+  lock.registration.factory:
+    class: Symfony\Component\Lock\LockFactory
+    arguments:
+      - '@lock.registration.store'
+
+  lock.registration.store:
+    class: Symfony\Component\Lock\Store\RedisStore
+    arguments:
+      - '@Redis'
+      - { prefix: 'registration_lock_' }
+
+  lock.referral.factory:
+    class: Symfony\Component\Lock\LockFactory
+    arguments:
+      - '@lock.referral.store'
+
+  lock.referral.store:
+    class: Symfony\Component\Lock\Store\RedisStore
+    arguments:
+      - '@Redis'
+      - { prefix: 'referral_lock_' }
+
+  # Custom rate limiter for complex scenarios
+  App\Service\Security\CustomRateLimiter:
+    arguments:
+      - '@limiter.withdrawal_amount'
+      - '@security.token_storage'
+      - '@doctrine.orm.entity_manager'

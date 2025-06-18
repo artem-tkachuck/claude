@@ -1,0 +1,39 @@
+framework:
+  router:
+    # Router configuration
+    utf8: true
+
+    # Strict requirements checking
+    strict_requirements: true
+
+    # Default URI
+    default_uri: '%env(DEFAULT_URI)%'
+
+    # Configure the HTTP port used when generating absolute URLs
+    # http_port: 80
+
+    # Configure the HTTPS port used when generating absolute URLs
+    # https_port: 443
+
+    # Type of resource to use for routing configuration
+    # type: annotation
+
+# Configure routes for different environments
+when@dev:
+  framework:
+    router:
+      # Be lenient about trailing slashes in dev
+      strict_requirements: false
+
+      # Show route debug info in profiler
+      resource: '%kernel.project_dir%/config/routes/dev.yaml'
+
+when@test:
+  framework:
+    router:
+      strict_requirements: true
+
+when@prod:
+  framework:
+    router:
+      strict_requirements: true

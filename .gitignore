@@ -1,0 +1,100 @@
+# Symfony
+/var/
+/vendor/
+.env
+.env.local
+.env.local.php
+.env.*.local
+/config/secrets/prod/prod.decrypt.private.php
+/public/bundles/
+/public/build/
+npm-debug.log
+yarn-error.log
+
+# PHP
+*.php~
+.php_cs.cache
+.php-cs-fixer.cache
+phpunit.xml
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Docker
+.docker/data/
+docker-compose.override.yml
+
+# Logs
+*.log
+/log/
+
+# Cache
+/cache/
+.cache/
+
+# Build files
+/build/
+/dist/
+
+# Backup files
+*.bak
+*.backup
+/backup/
+
+# SSL certificates (except examples)
+*.pem
+*.key
+*.crt
+!*.example.pem
+!*.example.key
+!*.example.crt
+/ssl/
+
+# JWT keys
+/config/jwt/*.pem
+!/config/jwt/*.pem.example
+
+# Uploaded files
+/public/uploads/
+/uploads/
+
+# Node
+node_modules/
+package-lock.json
+
+# Composer
+composer.phar
+
+# PHPUnit
+.phpunit.result.cache
+/phpunit.xml
+
+# Testing
+/tests/coverage/
+/tests/reports/
+
+# Security
+encryption.key
+.htpasswd
+
+# GeoIP database
+/var/geoip/
+*.mmdb
+
+# Temporary files
+*.tmp
+*.temp
+/tmp/
+
+# OS files
+Thumbs.db
+
+# Custom
+/custom/
+/private/
+daily_profit.txt

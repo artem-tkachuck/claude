@@ -1,0 +1,85 @@
+# Git
+.git
+.gitignore
+.gitattributes
+
+# Docker
+.docker/data/
+docker-compose.yml
+docker-compose.*.yml
+Dockerfile
+.dockerignore
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Application
+/var/*
+!/var/.gitkeep
+/vendor/
+/node_modules/
+/public/bundles/
+/public/build/
+/public/uploads/
+
+# Environment files
+.env
+.env.local
+.env.*.local
+.env.test
+
+# Tests
+/tests/
+/phpunit.xml
+.phpunit.result.cache
+/phpcs.xml
+/phpstan.neon
+/psalm.xml
+
+# Logs
+*.log
+/log/
+
+# Backup
+/backup/
+*.sql
+*.sql.gz
+
+# Documentation
+/docs/
+README.md
+CHANGELOG.md
+LICENSE
+
+# CI/CD
+/.github/
+/.gitlab-ci.yml
+/bitbucket-pipelines.yml
+
+# Build files
+/build/
+/dist/
+
+# Temporary files
+*.tmp
+*.temp
+*.cache
+*~
+
+# SSL
+*.pem
+*.key
+*.crt
+*.csr
+
+# Secrets
+/secrets/
+/config/jwt/*.pem
+encryption.key

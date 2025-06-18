@@ -1,0 +1,254 @@
+framework:
+  messenger:
+    # Uncomment this (and the failed transport below) to send failed messages to this transport for later handling.
+    failure_transport: failed
+
+    transports:
+      # Main async transport for general tasks
+      async:
+        dsn: '%env(MESSENGER_TRANSPORT_DSN)%'
+        retry_strategy:
+          max_retries: 3
+          delay: 1000
+          multiplier: 2
+          max_delay: 0
+          # service: null
+        options:
+          exchange:
+            name: messages
+            type: topic
+            default_publish_routing_key: async
+          queues:
+            messages_async:
+              binding_keys: [ async ]
+
+      # High priority transport for critical operations
+      async_priority_high:
+        dsn: '%env(MESSENGER_TRANSPORT_DSN)%'
+        retry_strategy:
+          max_retries: 5
+          delay: 500
+          multiplier: 1.5
+          max_delay: 5000
+        options:
+          exchange:
+            name: messages
+            type: topic
+            default_publish_routing_key: high_priority
+          queues:
+            messages_high_priority:
+              binding_keys: [ high_priority ]
+              arguments:
+                x-max-priority: 10
+
+      # Transport for blockchain operations
+      blockchain:
+        dsn: '%env(MESSENGER_TRANSPORT_DSN)%'
+        retry_strategy:
+          max_retries: 10
+          delay: 5000
+          multiplier: 2
+          max_delay: 300000 # 5 minutes
+        options:
+          exchange:
+            name: blockchain
+            type: direct
+          queues:
+            blockchain_operations:
+              binding_keys: [ blockchain ]
+
+      # Transport for notifications
+      notifications:
+        dsn: '%env(MESSENGER_TRANSPORT_DSN)%'
+        retry_strategy:
+          max_retries: 3
+          delay: 2000
+          multiplier: 2
+          max_delay: 10000
+        options:
+          exchange:
+            name: notifications
+            type: fanout
+          queues:
+            notifications_all:
+              binding_keys: [ ]
+
+      # Transport for email sending
+      email:
+        dsn: '%env(MESSENGER_TRANSPORT_DSN)%'
+        retry_strategy:
+          max_retries: 3
+          delay: 3000
+          multiplier: 2
+          max_delay: 30000
+        options:
+          exchange:
+            name: email
+            type: direct
+          queues:
+            email_queue:
+              binding_keys: [ email ]
+
+      # Failed messages transport
+      failed:
+        dsn: 'doctrine://default?queue_name=failed'
+        options:
+          auto_setup: true
+
+    # Route messages to appropriate transports
+    routing:
+      # Blockchain operations - high priority
+      App\Message\ProcessDeposit: blockchain
+      App\Message\ProcessWithdrawal: blockchain
+      App\Message\CheckTransaction: blockchain
+      App\Message\TransferToColdWallet: blockchain
+
+      # Notifications
+      App\Message\SendTelegramNotification: notifications
+      App\Message\SendEmailNotification: email
+      App\Message\SendAdminAlert: async_priority_high
+
+      # Bonus calculations
+      App\Message\CalculateBonus: async
+      App\Message\DistributeBonus: async
+      App\Message\ProcessReferralBonus: async
+
+      # User operations
+      App\Message\ProcessUserRegistration: async
+      App\Message\UpdateUserStatistics: async
+      App\Message\GenerateUserReport: async
+
+      # System operations
+      App\Message\PerformBackup: async
+      App\Message\CleanupOldData: async
+      App\Message\GenerateReport: async
+      App\Message\AuditLog: async
+
+    # Message bus configuration
+    default_bus: command.bus
+
+    buses:
+      command.bus:
+        middleware:
+          - add_bus_name_stamp_middleware: [ 'command.bus' ]
+          - dispatch_after_current_bus
+          - failed_message_processing_middleware
+          - send_message
+          - handle_message
+
+      query.bus:
+        middleware:
+          - add_bus_name_stamp_middleware: [ 'query.bus' ]
+          - handle_message
+
+      event.bus:
+        default_middleware: allow_no_handlers
+        middleware:
+          - add_bus_name_stamp_middleware: [ 'event.bus' ]
+          - send_message
+          - handle_message
+
+# Services configuration for messenger
+services:
+  # Custom middleware
+  App\Messenger\Middleware\:
+    resource: '../src/Messenger/Middleware/'
+    tags: [ 'messenger.middleware' ]
+
+  # Message handlers auto-configuration
+  App\MessageHandler\:
+    resource: '../src/MessageHandler/'
+    autoconfigure: true
+    tags: [ 'messenger.message_handler' ]
+
+  # Audit trail middleware
+  App\Messenger\Middleware\AuditTrailMiddleware:
+    tags:
+      - { name: 'messenger.middleware' }
+
+  # Transaction middleware for database operations
+  App\Messenger\Middleware\TransactionMiddleware:
+    tags:
+      - { name: 'messenger.middleware' }
+
+  # Rate limiting middleware
+  App\Messenger\Middleware\RateLimitMiddleware:
+    arguments:
+      $rateLimiter: '@app.rate_limiter.messenger'
+    tags:
+      - { name: 'messenger.middleware' }
+
+# Development configuration
+when@dev:
+  framework:
+    messenger:
+      transports:
+        async:
+          dsn: 'in-memory://'
+        blockchain:
+          dsn: 'in-memory://'
+        notifications:
+          dsn: 'in-memory://'
+        email:
+          dsn: 'in-memory://'
+
+# Test configuration
+when@test:
+  framework:
+    messenger:
+      transports:
+        async:
+          dsn: 'in-memory://'
+        blockchain:
+          dsn: 'in-memory://'
+        notifications:
+          dsn: 'in-memory://'
+        email:
+          dsn: 'in-memory://'
+        failed:
+          dsn: 'in-memory://'
+
+# Production configuration
+when@prod:
+  framework:
+    messenger:
+      transports:
+        async:
+          dsn: '%env(RABBITMQ_DSN)%/messages?exchange[name]=messages&exchange[type]=topic&exchange[default_publish_routing_key]=async'
+          retry_strategy:
+            max_retries: 3
+            delay: 1000
+            multiplier: 2
+            max_delay: 0
+
+        async_priority_high:
+          dsn: '%env(RABBITMQ_DSN)%/messages_priority?exchange[name]=messages&exchange[type]=topic&exchange[default_publish_routing_key]=high_priority'
+          retry_strategy:
+            max_retries: 5
+            delay: 500
+            multiplier: 1.5
+            max_delay: 5000
+
+        blockchain:
+          dsn: '%env(RABBITMQ_DSN)%/blockchain?exchange[name]=blockchain&exchange[type]=direct'
+          retry_strategy:
+            max_retries: 10
+            delay: 5000
+            multiplier: 2
+            max_delay: 300000
+
+        notifications:
+          dsn: '%env(RABBITMQ_DSN)%/notifications?exchange[name]=notifications&exchange[type]=fanout'
+          retry_strategy:
+            max_retries: 3
+            delay: 2000
+            multiplier: 2
+            max_delay: 10000
+
+        email:
+          dsn: '%env(RABBITMQ_DSN)%/email?exchange[name]=email&exchange[type]=direct'
+          retry_strategy:
+            max_retries: 3
+            delay: 3000
+            multiplier: 2
+            max_delay: 30000

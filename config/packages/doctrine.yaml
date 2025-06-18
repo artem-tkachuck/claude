@@ -1,0 +1,171 @@
+doctrine:
+  dbal:
+    url: '%env(resolve:DATABASE_URL)%'
+
+    # IMPORTANT: You MUST configure your server version,
+    # either here or in the DATABASE_URL env var (see .env file)
+    server_version: '8.0'
+
+    # Charset and collation
+    charset: utf8mb4
+    default_table_options:
+      charset: utf8mb4
+      collate: utf8mb4_unicode_ci
+      engine: InnoDB
+
+    # Custom types
+    types:
+      uuid: Ramsey\Uuid\Doctrine\UuidType
+
+    # Connection options
+    options:
+      # SSL connection for production
+      !php/const PDO::MYSQL_ATTR_SSL_CA: '%env(resolve:MYSQL_SSL_CA)%'
+      !php/const PDO::MYSQL_ATTR_SSL_VERIFY_SERVER_CERT: false
+
+    # Prevent database connection timeout
+    keepalive: 300
+
+    # Schema filter for migrations
+    schema_filter: ~^(?!view_)~
+
+  orm:
+    auto_generate_proxy_classes: true
+    naming_strategy: doctrine.orm.naming_strategy.underscore_number_aware
+    auto_mapping: true
+
+    # Query and result cache
+    query_cache_driver:
+      type: pool
+      pool: doctrine.query_cache_pool
+    result_cache_driver:
+      type: pool
+      pool: doctrine.result_cache_pool
+    metadata_cache_driver:
+      type: pool
+      pool: doctrine.metadata_cache_pool
+
+    mappings:
+      App:
+        is_bundle: false
+        dir: '%kernel.project_dir%/src/Entity'
+        prefix: 'App\Entity'
+        alias: App
+
+    # Custom DQL functions
+    dql:
+      string_functions:
+        JSON_EXTRACT: App\Doctrine\Functions\JsonExtract
+        JSON_CONTAINS: App\Doctrine\Functions\JsonContains
+        DATE_FORMAT: App\Doctrine\Functions\DateFormat
+      numeric_functions:
+        ROUND: App\Doctrine\Functions\Round
+        FLOOR: App\Doctrine\Functions\Floor
+        CEIL: App\Doctrine\Functions\Ceil
+      datetime_functions:
+        UNIX_TIMESTAMP: App\Doctrine\Functions\UnixTimestamp
+        DATE_ADD: App\Doctrine\Functions\DateAdd
+        DATE_SUB: App\Doctrine\Functions\DateSub
+
+    # Filters
+    filters:
+      softdeleteable:
+        class: Gedmo\SoftDeleteable\Filter\SoftDeleteableFilter
+        enabled: true
+      locale_filter:
+        class: App\Doctrine\Filter\LocaleFilter
+        enabled: false
+
+    # Entity listeners
+    entity_listeners:
+      App\Entity\User:
+        - { class: App\EventListener\UserEntityListener }
+      App\Entity\Transaction:
+        - { class: App\EventListener\TransactionEntityListener }
+      App\Entity\Withdrawal:
+        - { class: App\EventListener\WithdrawalEntityListener }
+
+    # Second level cache configuration
+    second_level_cache:
+      enabled: true
+      log_enabled: false
+      region_cache_driver:
+        type: pool
+        pool: doctrine.second_level_cache_pool
+      region_lifetime: 3600
+      regions:
+        users:
+          lifetime: 7200
+          cache_driver:
+            type: pool
+            pool: doctrine.second_level_cache_pool
+        settings:
+          lifetime: 86400
+          cache_driver:
+            type: pool
+            pool: doctrine.second_level_cache_pool
+
+# Doctrine cache pools configuration
+framework:
+  cache:
+    pools:
+      doctrine.query_cache_pool:
+        adapter: cache.adapter.redis
+        default_lifetime: 3600
+      doctrine.result_cache_pool:
+        adapter: cache.adapter.redis
+        default_lifetime: 600
+      doctrine.metadata_cache_pool:
+        adapter: cache.adapter.apcu
+        default_lifetime: 86400
+      doctrine.second_level_cache_pool:
+        adapter: cache.adapter.redis
+        default_lifetime: 3600
+
+# Doctrine extensions configuration
+stof_doctrine_extensions:
+  default_locale: '%env(DEFAULT_LOCALE)%'
+  orm:
+    default:
+      timestampable: true
+      blameable: true
+      loggable: true
+      sluggable: true
+      softdeleteable: true
+
+when@test:
+  doctrine:
+    dbal:
+      # "TEST_TOKEN" is typically set by ParaTest
+      dbname_suffix: '_test%env(default::TEST_TOKEN)%'
+
+when@prod:
+  doctrine:
+    orm:
+      auto_generate_proxy_classes: false
+      proxy_dir: '%kernel.build_dir%/doctrine/orm/Proxies'
+      query_cache_driver:
+        type: pool
+        pool: doctrine.query_cache_pool
+      result_cache_driver:
+        type: pool
+        pool: doctrine.result_cache_pool
+      metadata_cache_driver:
+        type: pool
+        pool: doctrine.metadata_cache_pool
+
+  # Production-specific cache configuration
+  framework:
+    cache:
+      pools:
+        doctrine.query_cache_pool:
+          adapter: cache.adapter.redis
+          default_lifetime: 7200
+          provider: 'redis://:%env(REDIS_PASSWORD)%@%env(REDIS_HOST)%:%env(REDIS_PORT)%/1'
+        doctrine.result_cache_pool:
+          adapter: cache.adapter.redis
+          default_lifetime: 3600
+          provider: 'redis://:%env(REDIS_PASSWORD)%@%env(REDIS_HOST)%:%env(REDIS_PORT)%/2'
+        doctrine.metadata_cache_pool:
+          adapter: cache.adapter.apcu
+          default_lifetime: 0 # Permanent until cache clear

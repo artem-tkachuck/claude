@@ -1,0 +1,173 @@
+framework:
+  validation:
+    # Enable validation annotations
+    enable_annotations: true
+
+    # Email validation mode
+    email_validation_mode: html5
+
+    # Enable automatic validation for forms
+    enabled: true
+
+    # Translation domain for validation messages
+    translation_domain: validators
+
+    # Mapping configuration
+    mapping:
+      paths:
+        - '%kernel.project_dir%/config/validator/'
+        - '%kernel.project_dir%/src/Entity/'
+        - '%kernel.project_dir%/src/Dto/'
+
+    # Auto mapping for validation
+    auto_mapping:
+      # Automatically validate these namespaces
+      App\Entity\:
+        namespace: App\Entity\
+      App\Dto\:
+        namespace: App\Dto\
+      App\Form\Model\:
+        namespace: App\Form\Model\
+
+    # Not compromised password validator configuration
+    not_compromised_password:
+      enabled: true
+      endpoint: null
+
+    # Static method to call for validation groups
+    getter_metadata:
+      enabled: true
+
+services:
+  # Custom validators
+  App\Validator\CryptoAddressValidator:
+    arguments:
+      - '@App\Service\Blockchain\AddressValidator'
+    tags:
+      - { name: validator.constraint_validator, alias: crypto_address }
+
+  App\Validator\CryptoAmountValidator:
+    arguments:
+      - '%app.withdrawal_config%'
+    tags:
+      - { name: validator.constraint_validator, alias: crypto_amount }
+
+  App\Validator\SecurePasswordValidator:
+    arguments:
+      - '@security.password_strength_meter'
+    tags:
+      - { name: validator.constraint_validator, alias: secure_password }
+
+  App\Validator\UniqueEmailValidator:
+    arguments:
+      - '@App\Repository\UserRepository'
+    tags:
+      - { name: validator.constraint_validator, alias: unique_email }
+
+  App\Validator\UniqueTelegramIdValidator:
+    arguments:
+      - '@App\Repository\UserRepository'
+    tags:
+      - { name: validator.constraint_validator, alias: unique_telegram_id }
+
+  App\Validator\TransactionHashValidator:
+    arguments:
+      - '@App\Service\Blockchain\TransactionValidator'
+    tags:
+      - { name: validator.constraint_validator, alias: transaction_hash }
+
+  App\Validator\WithdrawalLimitValidator:
+    arguments:
+      - '@App\Service\Transaction\WithdrawalService'
+      - '%app.withdrawal_config%'
+    tags:
+      - { name: validator.constraint_validator, alias: withdrawal_limit }
+
+  App\Validator\ReferralCodeValidator:
+    arguments:
+      - '@App\Repository\UserRepository'
+    tags:
+      - { name: validator.constraint_validator, alias: referral_code }
+
+  App\Validator\TwoFactorCodeValidator:
+    arguments:
+      - '@App\Service\Security\TwoFactorService'
+    tags:
+      - { name: validator.constraint_validator, alias: two_factor_code }
+
+  App\Validator\AllowedCountryValidator:
+    arguments:
+      - '%app.security_config.allowed_countries%'
+      - '%app.security_config.blocked_countries%'
+    tags:
+      - { name: validator.constraint_validator, alias: allowed_country }
+
+  App\Validator\SafeWithdrawalAddressValidator:
+    arguments:
+      - '@App\Service\Security\AntiFraudService'
+      - '@App\Repository\WithdrawalRepository'
+    tags:
+      - { name: validator.constraint_validator, alias: safe_withdrawal_address }
+
+  App\Validator\MinimumDepositValidator:
+    arguments:
+      - '%env(float:MINIMUM_DEPOSIT_AMOUNT)%'
+    tags:
+      - { name: validator.constraint_validator, alias: minimum_deposit }
+
+  App\Validator\DailyLimitValidator:
+    arguments:
+      - '@App\Repository\WithdrawalRepository'
+      - '%app.withdrawal_config.daily_limit%'
+    tags:
+      - { name: validator.constraint_validator, alias: daily_limit }
+
+  # Password strength meter service
+  security.password_strength_meter:
+    class: App\Service\Security\PasswordStrengthMeter
+    arguments:
+      - minLength: 12
+        requireUppercase: true
+        requireLowercase: true
+        requireNumbers: true
+        requireSpecialCharacters: true
+        forbiddenPasswords: [ 'password', '12345678', 'qwerty', 'admin' ]
+
+  # Validation groups resolver
+  App\Validator\ValidationGroupsResolver:
+    arguments:
+      - '@security.authorization_checker'
+      - '@security.token_storage'
+
+  # Entity validator listener
+  App\EventListener\EntityValidationListener:
+    arguments:
+      - '@validator'
+    tags:
+      - { name: doctrine.event_listener, event: prePersist }
+      - { name: doctrine.event_listener, event: preUpdate }
+
+# Validation for specific environments
+when@dev:
+  framework:
+    validation:
+      # More verbose error messages in development
+      not_compromised_password:
+        enabled: false # Disable for faster development
+
+when@test:
+  framework:
+    validation:
+      # Use simpler validation in tests
+      email_validation_mode: loose
+      not_compromised_password:
+        enabled: false
+
+when@prod:
+  framework:
+    validation:
+      # Stricter validation in production
+      email_validation_mode: strict
+      not_compromised_password:
+        enabled: true
+        endpoint: 'https://api.pwnedpasswords.com/range/'

@@ -1,0 +1,149 @@
+nelmio_cors:
+  defaults:
+    # Origins that are allowed to access the resource
+    allow_origin: [ '%env(CORS_ALLOW_ORIGIN)%' ]
+
+    # Allow cookies to be sent with requests
+    allow_credentials: true
+
+    # Headers that are allowed in requests
+    allow_headers:
+      - 'Content-Type'
+      - 'Authorization'
+      - 'X-Requested-With'
+      - 'X-Telegram-Auth-Token'
+      - 'X-CSRF-Token'
+      - 'X-Custom-Header'
+
+    # Headers exposed to the client
+    expose_headers:
+      - 'Link'
+      - 'X-Total-Count'
+      - 'X-Page-Count'
+      - 'X-Current-Page'
+      - 'X-Rate-Limit-Remaining'
+      - 'X-Rate-Limit-Reset'
+
+    # HTTP methods allowed
+    allow_methods:
+      - 'GET'
+      - 'POST'
+      - 'PUT'
+      - 'PATCH'
+      - 'DELETE'
+      - 'OPTIONS'
+
+    # Max age for preflight requests cache (in seconds)
+    max_age: 3600
+
+    # Hosts configuration
+    hosts: [ ]
+
+    # Origin regex patterns
+    origin_regex: false
+
+    # Forced "Access-Control-Allow-Origin" value
+    forced_allow_origin_value: ~
+
+    # Skip same origin requests
+    skip_same_as_origin: true
+
+  # Path-specific configurations
+  paths:
+    # API endpoints
+    '^/api/':
+      allow_origin: [ '%env(CORS_ALLOW_ORIGIN)%' ]
+      allow_headers: [ '*' ]
+      allow_methods: [ 'POST', 'PUT', 'PATCH', 'GET', 'DELETE', 'OPTIONS' ]
+      allow_credentials: true
+      max_age: 3600
+
+    # Telegram webhook - more restrictive
+    '^/telegram/webhook':
+      allow_origin: [ 'https://api.telegram.org' ]
+      allow_headers: [ 'Content-Type', 'X-Telegram-Bot-Api-Secret-Token' ]
+      allow_methods: [ 'POST' ]
+      allow_credentials: false
+      max_age: 0
+
+    # Public API endpoints (no credentials)
+    '^/api/public/':
+      allow_origin: [ '*' ]
+      allow_headers: [ 'Content-Type' ]
+      allow_methods: [ 'GET', 'OPTIONS' ]
+      allow_credentials: false
+      max_age: 86400
+
+    # Admin API - restrictive
+    '^/api/admin/':
+      allow_origin: [ '%env(ADMIN_CORS_ORIGIN)%' ]
+      allow_headers: [ '*' ]
+      allow_methods: [ '*' ]
+      allow_credentials: true
+      max_age: 3600
+
+    # Health check endpoint
+    '^/api/health':
+      allow_origin: [ '*' ]
+      allow_methods: [ 'GET' ]
+      allow_credentials: false
+      max_age: 300
+
+# Environment-specific configurations
+when@dev:
+  nelmio_cors:
+    defaults:
+      allow_origin: [ '*' ]
+      allow_credentials: true
+    paths:
+      '^/':
+        allow_origin: [ '*' ]
+        allow_headers: [ '*' ]
+        allow_methods: [ '*' ]
+        allow_credentials: true
+        max_age: 3600
+
+when@test:
+  nelmio_cors:
+    defaults:
+      allow_origin: [ 'http://localhost' ]
+      allow_credentials: true
+
+when@prod:
+  nelmio_cors:
+    defaults:
+      # Strict origin checking in production
+      allow_origin: [ ]
+      origin_regex: true
+      allow_credentials: true
+
+    paths:
+      # Main API - only from your domain
+      '^/api/':
+        origin_regex: true
+        allow_origin: [ '^https://yourdomain\.com$', '^https://app\.yourdomain\.com$' ]
+        allow_headers:
+          - 'Content-Type'
+          - 'Authorization'
+          - 'X-Requested-With'
+          - 'X-Telegram-Auth-Token'
+        allow_methods: [ 'GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS' ]
+        allow_credentials: true
+        max_age: 3600
+
+      # Telegram webhook - only from Telegram
+      '^/telegram/webhook':
+        allow_origin: [ 'https://api.telegram.org' ]
+        allow_headers: [ 'Content-Type', 'X-Telegram-Bot-Api-Secret-Token' ]
+        allow_methods: [ 'POST' ]
+        allow_credentials: false
+        max_age: 0
+
+      # Public endpoints
+      '^/api/public/':
+        origin_regex: true
+        allow_origin: [ '^https://.*\.yourdomain\.com$' ]
+        allow_headers: [ 'Content-Type' ]
+        allow_methods: [ 'GET', 'OPTIONS' ]
+        allow_credentials: false
+        max_age: 86400

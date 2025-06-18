@@ -1,0 +1,408 @@
+# English translations
+app:
+  name: 'Crypto Investment Platform'
+  title: 'Investment Platform'
+  description: 'Secure cryptocurrency investment with daily bonuses'
+
+# Navigation
+nav:
+  dashboard: 'Dashboard'
+  deposit: 'Deposit'
+  withdraw: 'Withdraw'
+  transactions: 'Transactions'
+  referrals: 'Referrals'
+  settings: 'Settings'
+  logout: 'Logout'
+  admin: 'Admin Panel'
+
+# Telegram Bot Messages
+telegram:
+  # Commands
+  start_command: |
+    🚀 Welcome to %app_name%!
+    
+    Your secure cryptocurrency investment platform with daily profit sharing.
+    
+    🔹 Minimum deposit: 100 USDT
+    🔹 Daily bonuses based on your deposit
+    🔹 Referral rewards: up to %referral_percentage%
+    🔹 Secure TRC-20 transactions
+    
+    Use the menu below to get started:
+
+  main_menu: '📱 Main Menu'
+  unknown_command: '❌ Unknown command. Please use the menu below or /help'
+  unauthorized: '🚫 Please start the bot first with /start'
+
+  # Menu buttons
+  menu:
+    balance: '💰 Balance'
+    deposit: '📥 Deposit'
+    withdraw: '📤 Withdraw'
+    referral: '👥 Referral Program'
+    language: '🌐 Language'
+    settings: '⚙️ Settings'
+    help: '❓ Help'
+    back: '⬅️ Back'
+
+  # Balance
+  balance_info: |
+    💰 <b>Your Balance:</b>
+    
+    🏦 Deposit: <b>%deposit% USDT</b>
+    💎 Bonus: <b>%bonus% USDT</b>
+    🎁 Referral: <b>%referral% USDT</b>
+    ━━━━━━━━━━━━━━━
+    💵 Total: <b>%total% USDT</b>
+    
+    📤 Available for withdrawal: <b>%available% USDT</b>
+
+  # Deposit
+  deposit_instruction: |
+    📥 <b>Deposit Instructions</b>
+    
+    To make a deposit, send USDT (TRC-20) to this address:
+    
+    <code>%address%</code>
+    
+    ⚠️ <b>Important:</b>
+    • Minimum deposit: 100 USDT
+    • Only TRC-20 network supported
+    • Deposits are locked for 1 year
+    • Send transaction hash after payment
+    
+    Your deposit will be credited after 19 confirmations.
+
+  deposit_enter_hash: '📝 Please enter your transaction hash:'
+  deposit_invalid_hash: '❌ Invalid transaction hash. Please check and try again.'
+  deposit_checking: '🔍 Checking your transaction...'
+  deposit_not_found: '❌ Transaction not found. Please wait and try again later.'
+  deposit_already_processed: '✅ This transaction has already been processed.'
+  deposit_confirmed: |
+    ✅ <b>Deposit Confirmed!</b>
+    
+    Amount: <b>%amount% USDT</b>
+    Transaction: <code>%hash%</code>
+    
+    Your balance has been updated.
+
+  # Withdrawal
+  withdrawal_menu: |
+    📤 <b>Withdrawal Menu</b>
+    
+    Available balance: <b>%available% USDT</b>
+    Minimum withdrawal: <b>%minimum% USDT</b>
+    Fee: <b>%fee_percentage%%</b>
+    
+    Choose an option:
+
+  withdrawal_enter_amount: '💵 Enter amount to withdraw (USDT):'
+  withdrawal_enter_address: '📍 Enter your TRC-20 wallet address:'
+  withdrawal_invalid_amount: '❌ Invalid amount. Please check your balance and try again.'
+  withdrawal_invalid_address: '❌ Invalid TRC-20 address. Please check and try again.'
+  withdrawal_below_minimum: '❌ Amount below minimum. Minimum withdrawal: %minimum% USDT'
+  withdrawal_insufficient_balance: '❌ Insufficient balance. Available: %available% USDT'
+  withdrawal_confirm: |
+    📋 <b>Confirm Withdrawal</b>
+    
+    Amount: <b>%amount% USDT</b>
+    Fee: <b>%fee% USDT</b>
+    You receive: <b>%receive% USDT</b>
+    
+    To address:
+    <code>%address%</code>
+    
+    Confirm this withdrawal?
+
+  withdrawal_submitted: |
+    ✅ <b>Withdrawal Request Submitted</b>
+    
+    Your withdrawal request has been submitted for processing.
+    
+    Request ID: <code>%id%</code>
+    Status: Pending admin approval
+    
+    You will be notified once processed.
+
+  withdrawal_approved: |
+    ✅ <b>Withdrawal Approved</b>
+    
+    Your withdrawal has been approved and sent.
+    
+    Amount: <b>%amount% USDT</b>
+    Transaction: <code>%hash%</code>
+
+  withdrawal_rejected: |
+    ❌ <b>Withdrawal Rejected</b>
+    
+    Your withdrawal request has been rejected.
+    
+    Reason: %reason%
+    
+    Please contact support if you have questions.
+
+  # Referral
+  referral_info: |
+    👥 <b>Referral Program</b>
+    
+    Earn bonuses by inviting friends!
+    
+    🎁 Your rewards:
+    • Level 1: %level1%% of deposits
+    • Level 2: %level2%% of deposits
+    
+    📊 Your statistics:
+    • Total referrals: %total_referrals%
+    • Active referrals: %active_referrals%
+    • Total earned: %total_earned% USDT
+    
+    🔗 Your referral link:
+    %link%
+    
+    Share this link to start earning!
+
+  referral_new_user: |
+    🎉 <b>New Referral!</b>
+    
+    %username% joined using your referral link!
+    
+    You'll earn %percentage%% when they make their first deposit.
+
+  referral_bonus_received: |
+    💰 <b>Referral Bonus Received!</b>
+    
+    Level %level% bonus: <b>%amount% USDT</b>
+    From: %username%
+    
+    Added to your referral balance.
+
+  # Settings
+  settings_menu: |
+    ⚙️ <b>Settings</b>
+    
+    Choose what you want to configure:
+
+  settings_auto_withdrawal: 'Auto-withdrawal: %status%'
+  settings_2fa: 'Two-factor auth: %status%'
+  settings_notifications: 'Notifications: %status%'
+
+  # Language
+  language_menu: '🌐 Select your language:'
+  language_changed: '✅ Language changed successfully!'
+
+  # Bonus
+  bonus_received: |
+    🎁 <b>Daily Bonus Received!</b>
+    
+    Your share: <b>%amount% USDT</b>
+    
+    Based on your deposit of %deposit% USDT
+    Added to your bonus balance.
+
+  # Errors
+  error_occurred: '❌ An error occurred. Please try again later.'
+  maintenance: '🔧 System maintenance. Please try again later.'
+
+  # Confirmations
+  confirm_yes: '✅ Yes, confirm'
+  confirm_no: '❌ No, cancel'
+
+  # Admin notifications
+  admin:
+    new_deposit: |
+      💰 <b>New Deposit</b>
+      
+      User: %username% (ID: %user_id%)
+      Amount: <b>%amount% USDT</b>
+      Transaction: <code>%hash%</code>
+
+    withdrawal_request: |
+      📤 <b>Withdrawal Request</b>
+      
+      User: %username% (ID: %user_id%)
+      Amount: <b>%amount% USDT</b>
+      To: <code>%address%</code>
+      
+      Review in admin panel.
+
+    suspicious_activity: |
+      🚨 <b>Suspicious Activity Detected</b>
+      
+      User: %username% (ID: %user_id%)
+      Type: %activity_type%
+      Details: %details%
+      
+      Immediate review required.
+
+# Web Interface
+web:
+  # Forms
+  form:
+    email: 'Email'
+    password: 'Password'
+    confirm_password: 'Confirm Password'
+    current_password: 'Current Password'
+    new_password: 'New Password'
+    amount: 'Amount'
+    address: 'Wallet Address'
+    transaction_hash: 'Transaction Hash'
+    two_factor_code: '2FA Code'
+    remember_me: 'Remember me'
+    submit: 'Submit'
+    cancel: 'Cancel'
+    save: 'Save'
+    search: 'Search'
+    filter: 'Filter'
+    export: 'Export'
+
+  # Login/Security
+  login:
+    title: 'Login'
+    subtitle: 'Access your investment account'
+    forgot_password: 'Forgot password?'
+    no_account: "Don't have an account?"
+    telegram_login: 'Login with Telegram'
+
+  security:
+    logout: 'Logout'
+    session_expired: 'Your session has expired'
+    access_denied: 'Access denied'
+
+  # Dashboard
+  dashboard:
+    title: 'Dashboard'
+    welcome: 'Welcome back, %name%!'
+    quick_stats: 'Quick Statistics'
+    total_deposits: 'Total Deposits'
+    total_bonus: 'Total Bonuses'
+    active_users: 'Active Users'
+    pending_withdrawals: 'Pending Withdrawals'
+    recent_transactions: 'Recent Transactions'
+    system_health: 'System Health'
+
+  # Transactions
+  transaction:
+    title: 'Transactions'
+    type: 'Type'
+    amount: 'Amount'
+    status: 'Status'
+    date: 'Date'
+    hash: 'Transaction Hash'
+    from: 'From'
+    to: 'To'
+    fee: 'Fee'
+    confirmations: 'Confirmations'
+
+    types:
+      deposit: 'Deposit'
+      withdrawal: 'Withdrawal'
+      bonus: 'Bonus'
+      referral_bonus: 'Referral Bonus'
+
+    statuses:
+      pending: 'Pending'
+      processing: 'Processing'
+      completed: 'Completed'
+      failed: 'Failed'
+      rejected: 'Rejected'
+
+  # Admin
+  admin:
+    title: 'Admin Panel'
+    users: 'Users Management'
+    withdrawals: 'Withdrawal Requests'
+    deposits: 'Deposits'
+    bonuses: 'Bonus Distribution'
+    settings: 'System Settings'
+    security: 'Security'
+    logs: 'Activity Logs'
+
+    user:
+      details: 'User Details'
+      balance: 'Balance'
+      status: 'Status'
+      verified: 'Verified'
+      actions: 'Actions'
+      block: 'Block User'
+      unblock: 'Unblock User'
+      reset_2fa: 'Reset 2FA'
+
+    withdrawal:
+      approve: 'Approve'
+      reject: 'Reject'
+      process: 'Process'
+      approval_required: '%count% approval(s) required'
+
+    settings:
+      general: 'General Settings'
+      blockchain: 'Blockchain Settings'
+      bonus: 'Bonus Settings'
+      referral: 'Referral Settings'
+      security: 'Security Settings'
+
+  # Notifications
+  notification:
+    deposit_received: 'Deposit of %amount% USDT received'
+    withdrawal_processed: 'Withdrawal of %amount% USDT processed'
+    bonus_credited: 'Bonus of %amount% USDT credited'
+    referral_joined: 'New referral joined: %username%'
+
+  # Errors
+  error:
+    page_not_found: 'Page not found'
+    server_error: 'Server error occurred'
+    invalid_request: 'Invalid request'
+    try_again: 'Please try again'
+    contact_support: 'Contact support if problem persists'
+
+# Email subjects
+email:
+  subject:
+    welcome: 'Welcome to %app_name%'
+    deposit_confirmed: 'Deposit Confirmed - %amount% USDT'
+    withdrawal_request: 'Withdrawal Request - %amount% USDT'
+    withdrawal_approved: 'Withdrawal Approved - %amount% USDT'
+    withdrawal_rejected: 'Withdrawal Rejected'
+    bonus_received: 'Daily Bonus Received - %amount% USDT'
+    security_alert: 'Security Alert - %app_name%'
+    two_factor_code: 'Your 2FA Code - %app_name%'
+
+# Status messages
+status:
+  success: 'Success'
+  error: 'Error'
+  warning: 'Warning'
+  info: 'Information'
+
+# Time
+time:
+  just_now: 'Just now'
+  minutes_ago: '%count% minutes ago'
+  hours_ago: '%count% hours ago'
+  days_ago: '%count% days ago'
+  months_ago: '%count% months ago'
+
+# Common
+common:
+  yes: 'Yes'
+  no: 'No'
+  confirm: 'Confirm'
+  cancel: 'Cancel'
+  close: 'Close'
+  back: 'Back'
+  next: 'Next'
+  previous: 'Previous'
+  loading: 'Loading...'
+  processing: 'Processing...'
+  enabled: 'Enabled'
+  disabled: 'Disabled'
+  active: 'Active'
+  inactive: 'Inactive'
+  all: 'All'
+  none: 'None'
+  total: 'Total'
+  date: 'Date'
+  time: 'Time'
+  user: 'User'
+  admin: 'Admin'
+  system: 'System'

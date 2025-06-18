@@ -1,0 +1,25 @@
+# Telegram Bot Routes
+
+# Webhook endpoint
+telegram_webhook:
+  path: /telegram/webhook/{token}
+  controller: App\Controller\Telegram\WebhookController::webhook
+  methods: POST
+  requirements:
+    token: '[a-zA-Z0-9_-]{32,64}'
+
+# Webhook management (admin only)
+telegram_set_webhook:
+  path: /telegram/webhook/set
+  controller: App\Controller\Telegram\WebhookController::setWebhook
+  methods: POST
+
+telegram_remove_webhook:
+  path: /telegram/webhook/remove
+  controller: App\Controller\Telegram\WebhookController::removeWebhook
+  methods: POST
+
+telegram_webhook_info:
+  path: /telegram/webhook/info
+  controller: App\Controller\Telegram\WebhookController::getWebhookInfo
+  methods: GET

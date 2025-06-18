@@ -1,0 +1,230 @@
+# Telegram Bot Configuration
+parameters:
+  telegram:
+    bot:
+      token: '%env(TELEGRAM_BOT_TOKEN)%'
+      username: '%env(TELEGRAM_BOT_USERNAME)%'
+      webhook:
+        url: '%env(APP_URL)%/telegram/webhook/%env(TELEGRAM_WEBHOOK_SECRET)%'
+        secret: '%env(TELEGRAM_WEBHOOK_SECRET)%'
+        max_connections: 100
+        allowed_updates:
+          - message
+          - callback_query
+          - inline_query
+          - chosen_inline_result
+          - edited_message
+
+    admin:
+      chat_id: '%env(TELEGRAM_ADMIN_CHAT_ID)%'
+      notification_channels:
+        - '%env(TELEGRAM_ADMIN_CHAT_ID)%'
+        - '%env(TELEGRAM_ALERTS_CHAT_ID)%'
+
+    features:
+      inline_queries: false
+      inline_keyboard: true
+      force_reply: true
+      parse_mode: 'HTML'
+      disable_web_page_preview: true
+      disable_notification: false
+
+    rate_limits:
+      messages_per_second: 30
+      messages_per_minute: 1000
+
+    commands:
+      # Public commands
+      start:
+        description: 'Start the bot and see welcome message'
+        admin_only: false
+      help:
+        description: 'Show help information'
+        admin_only: false
+      balance:
+        description: 'Check your balance'
+        admin_only: false
+      deposit:
+        description: 'Make a deposit'
+        admin_only: false
+      withdraw:
+        description: 'Request withdrawal'
+        admin_only: false
+      referral:
+        description: 'Get your referral link'
+        admin_only: false
+      language:
+        description: 'Change language'
+        admin_only: false
+      settings:
+        description: 'User settings'
+        admin_only: false
+
+      # Admin commands
+      stats:
+        description: 'Show system statistics'
+        admin_only: true
+      users:
+        description: 'Manage users'
+        admin_only: true
+      broadcast:
+        description: 'Send broadcast message'
+        admin_only: true
+      maintenance:
+        description: 'Toggle maintenance mode'
+        admin_only: true
+
+services:
+  # Telegram bot service
+  App\Service\Telegram\TelegramBotService:
+    arguments:
+      - '%telegram.bot.token%'
+      - '%telegram.bot.username%'
+      - '@App\Repository\UserRepository'
+      - '@translator'
+      - '@App\Service\Security\EncryptionService'
+      - '@logger'
+      - '@App\Service\Telegram\MenuBuilder'
+      - !tagged_iterator telegram.command_handler
+    tags:
+      - { name: monolog.logger, channel: telegram }
+
+  # Telegram menu builder
+  App\Service\Telegram\MenuBuilder:
+    arguments:
+      - '@translator'
+      - '@security.authorization_checker'
+      - '%telegram.features%'
+
+  # Telegram message formatter
+  App\Service\Telegram\MessageFormatter:
+    arguments:
+      - '@translator'
+      - '@App\Service\Crypto\CryptoFormatter'
+      - '%telegram.features.parse_mode%'
+
+  # Telegram callback handler
+  App\Service\Telegram\CallbackHandler:
+    arguments:
+      - '@App\Service\Telegram\TelegramBotService'
+      - '@doctrine.orm.entity_manager'
+      - '@translator'
+      - '@logger'
+
+  # Command handlers
+  App\Service\Telegram\CommandHandler\StartCommandHandler:
+    arguments:
+      - '@App\Repository\UserRepository'
+      - '@App\Service\User\RegistrationService'
+      - '@App\Service\Telegram\MenuBuilder'
+      - '@translator'
+    tags:
+      - { name: telegram.command_handler, command: start }
+
+  App\Service\Telegram\CommandHandler\BalanceCommandHandler:
+    arguments:
+      - '@App\Service\Telegram\MessageFormatter'
+      - '@translator'
+    tags:
+      - { name: telegram.command_handler, command: balance }
+
+  App\Service\Telegram\CommandHandler\DepositCommandHandler:
+    arguments:
+      - '@App\Service\Transaction\DepositService'
+      - '@App\Service\Blockchain\BlockchainServiceInterface'
+      - '@App\Service\Telegram\MessageFormatter'
+      - '@translator'
+    tags:
+      - { name: telegram.command_handler, command: deposit }
+
+  App\Service\Telegram\CommandHandler\WithdrawCommandHandler:
+    arguments:
+      - '@App\Service\Transaction\WithdrawalService'
+      - '@App\Service\Telegram\MessageFormatter'
+      - '@translator'
+      - '@validator'
+    tags:
+      - { name: telegram.command_handler, command: withdraw }
+
+  App\Service\Telegram\CommandHandler\ReferralCommandHandler:
+    arguments:
+      - '@App\Service\User\ReferralService'
+      - '@App\Service\Telegram\MessageFormatter'
+      - '@translator'
+      - '@router'
+    tags:
+      - { name: telegram.command_handler, command: referral }
+
+  App\Service\Telegram\CommandHandler\LanguageCommandHandler:
+    arguments:
+      - '@App\Repository\UserRepository'
+      - '@App\Service\Telegram\MenuBuilder'
+      - '@translator'
+    tags:
+      - { name: telegram.command_handler, command: language }
+
+  App\Service\Telegram\CommandHandler\HelpCommandHandler:
+    arguments:
+      - '@App\Service\Telegram\MessageFormatter'
+      - '@translator'
+      - '%telegram.commands%'
+    tags:
+      - { name: telegram.command_handler, command: help }
+
+  App\Service\Telegram\CommandHandler\AdminCommandHandler:
+    arguments:
+      - '@App\Service\Admin\AdminService'
+      - '@App\Service\Telegram\MessageFormatter'
+      - '@translator'
+      - '@security.authorization_checker'
+    tags:
+      - { name: telegram.command_handler, command: stats }
+      - { name: telegram.command_handler, command: users }
+      - { name: telegram.command_handler, command: broadcast }
+      - { name: telegram.command_handler, command: maintenance }
+
+  # Telegram notification handler
+  App\Service\Telegram\NotificationHandler:
+    arguments:
+      - '%telegram.bot.token%'
+      - '%telegram.admin.notification_channels%'
+      - '@App\Service\Telegram\MessageFormatter'
+      - '@logger'
+      - '@App\Service\Queue\QueueManager'
+
+  # Webhook manager
+  App\Service\Telegram\WebhookManager:
+    arguments:
+      - '%telegram.bot.token%'
+      - '%telegram.bot.webhook%'
+      - '@logger'
+
+  # Anti-spam service for Telegram
+  App\Service\Telegram\AntiSpamService:
+    arguments:
+      - '@cache.telegram'
+      - '%telegram.rate_limits%'
+      - '@logger'
+
+when@dev:
+  parameters:
+    telegram:
+      bot:
+        webhook:
+          url: '%env(NGROK_URL)%/telegram/webhook/%env(TELEGRAM_WEBHOOK_SECRET)%'
+
+when@test:
+  parameters:
+    telegram:
+      bot:
+        token: 'test_token'
+        username: 'test_bot'
+
+when@prod:
+  parameters:
+    telegram:
+      features:
+        disable_notification: true
+      rate_limits:
+        messages_per_second: 20
+        messages_per_minute: 600

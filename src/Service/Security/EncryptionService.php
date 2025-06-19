@@ -2,143 +2,236 @@
 
 namespace App\Service\Security;
 
-use InvalidArgumentException;
-use Symfony\Component\DependencyInjection\ParameterBag\ParameterBagInterface;
+use Exception;
+use Psr\Log\LoggerInterface;
+use RuntimeException;
+use Symfony\Component\DependencyInjection\Attribute\Autowire;
 
 class EncryptionService
 {
-    private string $key;
-    private string $cipher = 'aes-256-gcm';
+    private string $encryptionKey;
+    private string $algorithm = 'aes-256-gcm';
+    private LoggerInterface $logger;
 
-    public function __construct(ParameterBagInterface $params)
+    public function __construct(
+        #[Autowire('%env(ENCRYPTION_KEY)%')] string $encryptionKey,
+        LoggerInterface                             $logger
+    )
     {
-        $this->key = base64_decode($params->get('app.encryption_key'));
+        $this->encryptionKey = base64_decode($encryptionKey);
+        $this->logger = $logger;
     }
 
-    public function encrypt(string $data): string
+    /**
+     * Generate encryption key
+     */
+    public static function generateEncryptionKey(): string
     {
-        $ivLength = openssl_cipher_iv_length($this->cipher);
-        $iv = openssl_random_pseudo_bytes($ivLength);
-        $tag = '';
-
-        $encrypted = openssl_encrypt(
-            $data,
-            $this->cipher,
-            $this->key,
-            OPENSSL_RAW_DATA,
-            $iv,
-            $tag
-        );
-
-        return base64_encode($iv . $tag . $encrypted);
+        return base64_encode(random_bytes(32));
     }
 
-    public function decrypt(string $data): string
+    /**
+     * Verify hashed data
+     */
+    public function verifyHash(string $data, string $hash): bool
     {
-        $data = base64_decode($data);
-        $ivLength = openssl_cipher_iv_length($this->cipher);
-        $iv = substr($data, 0, $ivLength);
-        $tag = substr($data, $ivLength, 16);
-        $encrypted = substr($data, $ivLength + 16);
-
-        return openssl_decrypt(
-            $encrypted,
-            $this->cipher,
-            $this->key,
-            OPENSSL_RAW_DATA,
-            $iv,
-            $tag
-        );
+        return hash_equals($hash, $this->hash($data));
     }
 
-    public function hashPassword(string $password): string
+    /**
+     * Hash sensitive data (one-way)
+     */
+    public function hash(string $data): string
     {
-        return password_hash($password, PASSWORD_ARGON2ID, [
-            'memory_cost' => 65536,
-            'time_cost' => 4,
-            'threads' => 3,
-        ]);
+        return hash_hmac('sha256', $data, $this->encryptionKey);
     }
 
-    public function verifyPassword(string $password, string $hash): bool
-    {
-        return password_verify($password, $hash);
-    }
-
+    /**
+     * Generate secure random token
+     */
     public function generateSecureToken(int $length = 32): string
     {
         return bin2hex(random_bytes($length));
     }
 
-    public function generateTOTPSecret(): string
+    /**
+     * Encrypt array data
+     *
+     * @param array<string, mixed> $data
+     */
+    public function encryptArray(array $data): string
     {
-        $chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
-        $secret = '';
-        for ($i = 0; $i < 32; $i++) {
-            $secret .= $chars[random_int(0, 31)];
-        }
-        return $secret;
+        return $this->encrypt(json_encode($data));
     }
 
-    public function verifyTOTP(string $secret, string $code): bool
+    /**
+     * Encrypt sensitive data
+     */
+    public function encrypt(string $data): string
     {
-        $time = floor(time() / 30);
+        try {
+            $ivLength = openssl_cipher_iv_length($this->algorithm);
+            $iv = openssl_random_pseudo_bytes($ivLength);
+            $tag = '';
 
-        // Check current and previous time windows
-        for ($i = -1; $i <= 1; $i++) {
-            $calculatedCode = $this->calculateTOTP($secret, $time + $i);
-            if (hash_equals($calculatedCode, $code)) {
-                return true;
+            $encrypted = openssl_encrypt(
+                $data,
+                $this->algorithm,
+                $this->encryptionKey,
+                OPENSSL_RAW_DATA,
+                $iv,
+                $tag
+            );
+
+            if ($encrypted === false) {
+                throw new RuntimeException('Encryption failed');
             }
-        }
 
-        return false;
+            // Combine IV + tag + encrypted data
+            $combined = base64_encode($iv . $tag . $encrypted);
+
+            return $combined;
+        } catch (Exception $e) {
+            $this->logger->error('Encryption error', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
+            throw new RuntimeException('Failed to encrypt data', 0, $e);
+        }
     }
 
-    private function calculateTOTP(string $secret, int $time): string
+    /**
+     * Decrypt array data
+     *
+     * @return array<string, mixed>
+     */
+    public function decryptArray(string $encryptedData): array
     {
-        $key = base32_decode($secret);
-        $time = pack('N*', 0, $time);
-        $hash = hash_hmac('sha1', $time, $key, true);
-        $offset = ord($hash[19]) & 0xf;
-        $code = (
-                ((ord($hash[$offset]) & 0x7f) << 24) |
-                ((ord($hash[$offset + 1]) & 0xff) << 16) |
-                ((ord($hash[$offset + 2]) & 0xff) << 8) |
-                (ord($hash[$offset + 3]) & 0xff)
-            ) % 1000000;
-
-        return str_pad((string)$code, 6, '0', STR_PAD_LEFT);
-    }
-}
-
-function base32_decode($input)
-{
-    $map = [
-        'A' => 0, 'B' => 1, 'C' => 2, 'D' => 3, 'E' => 4, 'F' => 5, 'G' => 6, 'H' => 7,
-        'I' => 8, 'J' => 9, 'K' => 10, 'L' => 11, 'M' => 12, 'N' => 13, 'O' => 14, 'P' => 15,
-        'Q' => 16, 'R' => 17, 'S' => 18, 'T' => 19, 'U' => 20, 'V' => 21, 'W' => 22, 'X' => 23,
-        'Y' => 24, 'Z' => 25, '2' => 26, '3' => 27, '4' => 28, '5' => 29, '6' => 30, '7' => 31,
-    ];
-
-    $input = strtoupper(rtrim($input, '='));
-    $output = '';
-    $buffer = 0;
-    $bits = 0;
-
-    foreach (str_split($input) as $char) {
-        if (!isset($map[$char])) {
-            throw new InvalidArgumentException('Invalid base32 character');
-        }
-
-        $buffer = ($buffer << 5) | $map[$char];
-        $bits += 5;
-
-        if ($bits >= 8) {
-            $bits -= 8;
-            $output .= chr(($buffer >> $bits) & 0xFF);
-        }
+        $decrypted = $this->decrypt($encryptedData);
+        return json_decode($decrypted, true);
     }
 
-    return $output;
+    /**
+     * Decrypt sensitive data
+     */
+    public function decrypt(string $encryptedData): string
+    {
+        try {
+            $decoded = base64_decode($encryptedData);
+
+            $ivLength = openssl_cipher_iv_length($this->algorithm);
+            $tagLength = 16; // For AES-GCM
+
+            // Extract components
+            $iv = substr($decoded, 0, $ivLength);
+            $tag = substr($decoded, $ivLength, $tagLength);
+            $encrypted = substr($decoded, $ivLength + $tagLength);
+
+            $decrypted = openssl_decrypt(
+                $encrypted,
+                $this->algorithm,
+                $this->encryptionKey,
+                OPENSSL_RAW_DATA,
+                $iv,
+                $tag
+            );
+
+            if ($decrypted === false) {
+                throw new RuntimeException('Decryption failed');
+            }
+
+            return $decrypted;
+        } catch (Exception $e) {
+            $this->logger->error('Decryption error', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
+            throw new RuntimeException('Failed to decrypt data', 0, $e);
+        }
+    }
+
+    /**
+     * Mask sensitive data for logs
+     */
+    public function maskSensitiveData(string $data, int $visibleChars = 4): string
+    {
+        if (strlen($data) <= $visibleChars * 2) {
+            return str_repeat('*', strlen($data));
+        }
+
+        $start = substr($data, 0, $visibleChars);
+        $end = substr($data, -$visibleChars);
+        $masked = str_repeat('*', strlen($data) - ($visibleChars * 2));
+
+        return $start . $masked . $end;
+    }
+
+    /**
+     * Encrypt file
+     */
+    public function encryptFile(string $inputPath, string $outputPath): void
+    {
+        $handle = fopen($inputPath, 'rb');
+        $outputHandle = fopen($outputPath, 'wb');
+
+        if (!$handle || !$outputHandle) {
+            throw new RuntimeException('Failed to open file');
+        }
+
+        try {
+            $ivLength = openssl_cipher_iv_length($this->algorithm);
+            $iv = openssl_random_pseudo_bytes($ivLength);
+
+            // Write IV to the beginning of the file
+            fwrite($outputHandle, $iv);
+
+            while (!feof($handle)) {
+                $chunk = fread($handle, 8192);
+                if ($chunk === false) {
+                    break;
+                }
+
+                $encrypted = openssl_encrypt(
+                    $chunk,
+                    $this->algorithm,
+                    $this->encryptionKey,
+                    OPENSSL_RAW_DATA,
+                    $iv
+                );
+
+                fwrite($outputHandle, $encrypted);
+            }
+        } finally {
+            fclose($handle);
+            fclose($outputHandle);
+        }
+    }
+
+    /**
+     * Rotate encryption key
+     */
+    public function rotateKey(string $newKey, array $dataToReEncrypt): void
+    {
+        $oldKey = $this->encryptionKey;
+        $this->encryptionKey = base64_decode($newKey);
+
+        try {
+            foreach ($dataToReEncrypt as $item) {
+                // Decrypt with old key
+                $this->encryptionKey = $oldKey;
+                $decrypted = $this->decrypt($item['encrypted_data']);
+
+                // Encrypt with new key
+                $this->encryptionKey = base64_decode($newKey);
+                $reEncrypted = $this->encrypt($decrypted);
+
+                // Update the data (implement based on your needs)
+                $item['update_callback']($reEncrypted);
+            }
+        } catch (Exception $e) {
+            // Rollback to old key on failure
+            $this->encryptionKey = $oldKey;
+            throw $e;
+        }
+    }
 }

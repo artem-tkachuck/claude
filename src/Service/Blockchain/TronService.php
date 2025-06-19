@@ -2,223 +2,410 @@
 
 namespace App\Service\Blockchain;
 
-use App\Entity\Withdrawal;
+use App\Repository\DepositRepository;
+use App\Repository\SystemSettingsRepository;
 use App\Service\Security\EncryptionService;
 use Exception;
-use GuzzleHttp\Client;
 use Psr\Log\LoggerInterface;
 use RuntimeException;
+use Symfony\Component\DependencyInjection\Attribute\Autowire;
+use Symfony\Contracts\HttpClient\HttpClientInterface;
 
-class TronService implements BlockchainServiceInterface
+class TronService
 {
-    private Client $client;
-    private string $apiKey;
-    private string $hotWalletAddress;
-    private string $coldWalletAddress;
-    private float $coldWalletThreshold;
-    private EncryptionService $encryption;
+    private HttpClientInterface $httpClient;
+    private EncryptionService $encryptionService;
+    private SystemSettingsRepository $settingsRepository;
+    private DepositRepository $depositRepository;
     private LoggerInterface $logger;
+    private string $apiKey;
+    private string $apiUrl;
+    private array $networkConfig;
 
     public function __construct(
-        string            $tronApiKey,
-        string            $hotWalletAddress,
-        string            $coldWalletAddress,
-        float             $coldWalletThreshold,
-        EncryptionService $encryption,
-        LoggerInterface   $logger
+        HttpClientInterface                       $httpClient,
+        EncryptionService                         $encryptionService,
+        SystemSettingsRepository                  $settingsRepository,
+        DepositRepository                         $depositRepository,
+        LoggerInterface                           $logger,
+        #[Autowire('%env(TRON_API_KEY)%')] string $apiKey,
+        #[Autowire('%env(TRON_API_URL)%')] string $apiUrl
     )
     {
-        $this->client = new Client([
-            'base_uri' => 'https://api.trongrid.io',
-            'timeout' => 30,
-            'headers' => [
-                'TRON-PRO-API-KEY' => $tronApiKey,
-            ],
-        ]);
-        $this->apiKey = $tronApiKey;
-        $this->hotWalletAddress = $hotWalletAddress;
-        $this->coldWalletAddress = $coldWalletAddress;
-        $this->coldWalletThreshold = $coldWalletThreshold;
-        $this->encryption = $encryption;
+        $this->httpClient = $httpClient;
+        $this->encryptionService = $encryptionService;
+        $this->settingsRepository = $settingsRepository;
+        $this->depositRepository = $depositRepository;
         $this->logger = $logger;
+        $this->apiKey = $apiKey;
+        $this->apiUrl = $apiUrl;
+
+        $this->networkConfig = [
+            'TRC20' => [
+                'contract' => 'TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t', // USDT TRC20
+                'decimals' => 6,
+                'min_confirmations' => 19
+            ]
+        ];
     }
 
-    public function validateAddress(string $address): bool
+    /**
+     * Generate new deposit address
+     */
+    public function generateDepositAddress(): array
     {
         try {
-            // TRC20 address validation
-            if (!preg_match('/^T[A-Za-z1-9]{33}$/', $address)) {
-                return false;
+            $response = $this->httpClient->request('POST', $this->apiUrl . '/v1/wallet/generateaddress', [
+                'headers' => [
+                    'TRON-PRO-API-KEY' => $this->apiKey,
+                ],
+                'json' => [
+                    'network' => 'tron'
+                ]
+            ]);
+
+            $data = $response->toArray();
+
+            if (!isset($data['address']) || !isset($data['privateKey'])) {
+                throw new RuntimeException('Invalid response from Tron API');
             }
 
-            $response = $this->client->post('/wallet/validateaddress', [
-                'json' => ['address' => $address],
+            // Encrypt private key before storing
+            $encryptedPrivateKey = $this->encryptionService->encrypt($data['privateKey']);
+
+            $this->logger->info('New deposit address generated', [
+                'address' => $data['address']
             ]);
 
-            $data = json_decode($response->getBody()->getContents(), true);
-            return $data['result'] ?? false;
+            return [
+                'address' => $data['address'],
+                'privateKey' => $encryptedPrivateKey,
+                'hexAddress' => $data['hexAddress'] ?? null
+            ];
         } catch (Exception $e) {
-            $this->logger->error('Address validation failed', [
-                'address' => $address,
-                'error' => $e->getMessage(),
+            $this->logger->error('Failed to generate deposit address', [
+                'error' => $e->getMessage()
             ]);
-            return false;
+            throw $e;
         }
     }
 
-    public function getTransaction(string $txHash): ?array
+    /**
+     * Check address balance
+     */
+    public function getBalance(string $address): float
     {
         try {
-            $response = $this->client->post('/wallet/gettransactionbyid', [
-                'json' => ['value' => $txHash],
+            $response = $this->httpClient->request('GET', $this->apiUrl . '/v1/accounts/' . $address, [
+                'headers' => [
+                    'TRON-PRO-API-KEY' => $this->apiKey,
+                ]
             ]);
 
-            $data = json_decode($response->getBody()->getContents(), true);
+            $data = $response->toArray();
+
+            // Get TRX balance
+            $trxBalance = ($data['balance'] ?? 0) / 1000000;
+
+            // Get USDT balance
+            $usdtBalance = $this->getTokenBalance($address, $this->networkConfig['TRC20']['contract']);
+
+            return $usdtBalance;
+        } catch (Exception $e) {
+            $this->logger->error('Failed to get balance', [
+                'address' => $address,
+                'error' => $e->getMessage()
+            ]);
+            return 0;
+        }
+    }
+
+    /**
+     * Get token balance (USDT)
+     */
+    public function getTokenBalance(string $address, string $contractAddress): float
+    {
+        try {
+            $response = $this->httpClient->request('GET',
+                $this->apiUrl . '/v1/accounts/' . $address . '/tokens/' . $contractAddress, [
+                    'headers' => [
+                        'TRON-PRO-API-KEY' => $this->apiKey,
+                    ]
+                ]);
+
+            $data = $response->toArray();
+            $balance = $data['balance'] ?? '0';
+
+            // Convert from smallest unit to USDT
+            return floatval($balance) / pow(10, $this->networkConfig['TRC20']['decimals']);
+        } catch (Exception $e) {
+            $this->logger->error('Failed to get token balance', [
+                'address' => $address,
+                'contract' => $contractAddress,
+                'error' => $e->getMessage()
+            ]);
+            return 0;
+        }
+    }
+
+    /**
+     * Monitor incoming transactions
+     */
+    public function checkIncomingTransactions(string $address, ?string $lastTxId = null): array
+    {
+        try {
+            $params = [
+                'only_to' => true,
+                'limit' => 50,
+                'order_by' => 'block_timestamp,desc'
+            ];
+
+            if ($lastTxId) {
+                $params['min_timestamp'] = $this->getTransactionTimestamp($lastTxId) + 1;
+            }
+
+            $response = $this->httpClient->request('GET',
+                $this->apiUrl . '/v1/accounts/' . $address . '/transactions/trc20', [
+                    'headers' => [
+                        'TRON-PRO-API-KEY' => $this->apiKey,
+                    ],
+                    'query' => $params
+                ]);
+
+            $data = $response->toArray();
+            $transactions = $data['data'] ?? [];
+
+            $processedTxs = [];
+
+            foreach ($transactions as $tx) {
+                // Only process USDT transactions
+                if ($tx['token_info']['address'] !== $this->networkConfig['TRC20']['contract']) {
+                    continue;
+                }
+
+                $amount = floatval($tx['value']) / pow(10, $tx['token_info']['decimals']);
+
+                $processedTxs[] = [
+                    'txid' => $tx['transaction_id'],
+                    'from' => $tx['from'],
+                    'to' => $tx['to'],
+                    'amount' => $amount,
+                    'timestamp' => $tx['block_timestamp'] / 1000,
+                    'confirmations' => $this->getConfirmations($tx['block_number'] ?? 0),
+                    'token' => $tx['token_info']['symbol']
+                ];
+            }
+
+            return $processedTxs;
+        } catch (Exception $e) {
+            $this->logger->error('Failed to check incoming transactions', [
+                'address' => $address,
+                'error' => $e->getMessage()
+            ]);
+            return [];
+        }
+    }
+
+    /**
+     * Get transaction timestamp
+     */
+    private function getTransactionTimestamp(string $txId): int
+    {
+        $tx = $this->getTransaction($txId);
+        return $tx['timestamp'] ?? 0;
+    }
+
+    /**
+     * Get transaction details
+     */
+    public function getTransaction(string $txId): ?array
+    {
+        try {
+            $response = $this->httpClient->request('GET', $this->apiUrl . '/v1/transactions/' . $txId, [
+                'headers' => [
+                    'TRON-PRO-API-KEY' => $this->apiKey,
+                ]
+            ]);
+
+            $data = $response->toArray();
 
             if (empty($data)) {
                 return null;
             }
 
-            // Parse USDT transfer
-            if (isset($data['raw_data']['contract'][0]['parameter']['value'])) {
-                $contract = $data['raw_data']['contract'][0];
-                if ($contract['type'] === 'TriggerSmartContract') {
-                    $value = $contract['parameter']['value'];
-                    // Decode transfer function
-                    if (str_starts_with($value['data'] ?? '', 'a9059cbb')) {
-                        return [
-                            'hash' => $data['txID'],
-                            'from' => $value['owner_address'],
-                            'to' => 'T' . substr($value['data'], 32, 40),
-                            'amount' => bcdiv(hexdec(substr($value['data'], 72)), '1000000', 8),
-                            'confirmations' => $this->getConfirmations($data['blockNumber'] ?? 0),
-                            'status' => ($data['ret'][0]['contractRet'] ?? '') === 'SUCCESS',
-                        ];
-                    }
-                }
-            }
-
-            return null;
+            return [
+                'txid' => $data['txID'],
+                'status' => $data['ret'][0]['contractRet'] ?? 'UNKNOWN',
+                'block' => $data['blockNumber'] ?? null,
+                'timestamp' => $data['blockTimeStamp'] ?? null,
+                'fee' => ($data['fee'] ?? 0) / 1000000,
+                'data' => $data
+            ];
         } catch (Exception $e) {
-            $this->logger->error('Transaction fetch failed', [
-                'hash' => $txHash,
-                'error' => $e->getMessage(),
+            $this->logger->error('Failed to get transaction', [
+                'txid' => $txId,
+                'error' => $e->getMessage()
             ]);
             return null;
         }
     }
 
+    /**
+     * Calculate confirmations
+     */
     private function getConfirmations(int $blockNumber): int
     {
-        try {
-            $response = $this->client->post('/wallet/getnowblock');
-            $data = json_decode($response->getBody()->getContents(), true);
-            $currentBlock = $data['block_header']['raw_data']['number'] ?? 0;
+        if ($blockNumber === 0) {
+            return 0;
+        }
 
-            return max(0, $currentBlock - $blockNumber);
+        $currentBlock = $this->getCurrentBlock();
+        return max(0, $currentBlock - $blockNumber);
+    }
+
+    /**
+     * Get current block number
+     */
+    private function getCurrentBlock(): int
+    {
+        try {
+            $response = $this->httpClient->request('GET', $this->apiUrl . '/v1/blocks/latest', [
+                'headers' => [
+                    'TRON-PRO-API-KEY' => $this->apiKey,
+                ]
+            ]);
+
+            $data = $response->toArray();
+            return $data['block_header']['raw_data']['number'] ?? 0;
         } catch (Exception $e) {
             return 0;
         }
     }
 
-    public function sendTransaction(Withdrawal $withdrawal): ?string
+    /**
+     * Validate Tron address
+     */
+    public function validateAddress(string $address): bool
     {
-        try {
-            // Security check: Ensure we're not sending to suspicious addresses
-            if ($this->isAddressSuspicious($withdrawal->getToAddress())) {
-                throw new RuntimeException('Suspicious address detected');
-            }
-
-            // Use hot wallet for automated withdrawals
-            $fromAddress = $this->hotWalletAddress;
-
-            // Check hot wallet balance
-            $balance = $this->getBalance($fromAddress);
-            $totalAmount = bcadd($withdrawal->getAmount(), $withdrawal->getFee(), 8);
-
-            if (bccomp($balance, $totalAmount, 8) < 0) {
-                throw new RuntimeException('Insufficient hot wallet balance');
-            }
-
-            // In production, you would sign and broadcast the transaction
-            // This is a placeholder for the actual implementation
-            $this->logger->info('Withdrawal transaction prepared', [
-                'withdrawal_id' => $withdrawal->getId(),
-                'amount' => $withdrawal->getAmount(),
-                'to' => $withdrawal->getToAddress(),
-            ]);
-
-            // Move excess funds to cold wallet if threshold exceeded
-            $this->checkAndMoveToColdWallet($balance);
-
-            // Return mock transaction hash for now
-            return 'TX' . bin2hex(random_bytes(32));
-        } catch (Exception $e) {
-            $this->logger->error('Transaction send failed', [
-                'withdrawal_id' => $withdrawal->getId(),
-                'error' => $e->getMessage(),
-            ]);
-            return null;
+        // Check if address starts with T and is 34 characters
+        if (!preg_match('/^T[1-9A-HJ-NP-Za-km-z]{33}$/', $address)) {
+            return false;
         }
-    }
 
-    private function isAddressSuspicious(string $address): bool
-    {
-        // Implement blacklist checking, pattern matching, etc.
-        // Check against known scam addresses, mixers, etc.
-        return false;
-    }
-
-    public function getBalance(string $address): string
-    {
         try {
-            // USDT contract address on Tron
-            $contractAddress = 'TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t';
-
-            $response = $this->client->post('/wallet/triggerconstantcontract', [
-                'json' => [
-                    'owner_address' => $address,
-                    'contract_address' => $contractAddress,
-                    'function_selector' => 'balanceOf(address)',
-                    'parameter' => str_pad(substr($address, 2), 64, '0', STR_PAD_LEFT),
+            // Verify with API
+            $response = $this->httpClient->request('POST', $this->apiUrl . '/wallet/validateaddress', [
+                'headers' => [
+                    'TRON-PRO-API-KEY' => $this->apiKey,
                 ],
+                'json' => [
+                    'address' => $address
+                ]
             ]);
 
-            $data = json_decode($response->getBody()->getContents(), true);
-            if (isset($data['constant_result'][0])) {
-                $balance = hexdec($data['constant_result'][0]);
-                return bcdiv((string)$balance, '1000000', 8); // USDT has 6 decimals
+            $data = $response->toArray();
+            return $data['result'] ?? false;
+        } catch (Exception $e) {
+            $this->logger->warning('Address validation failed', [
+                'address' => $address,
+                'error' => $e->getMessage()
+            ]);
+            return false;
+        }
+    }
+
+    /**
+     * Estimate transaction fee
+     */
+    public function estimateFee(string $from, string $to, float $amount): float
+    {
+        // TRC20 transfer typically costs 10-30 TRX
+        // This is a simplified estimation
+        return 15.0; // TRX
+    }
+
+    /**
+     * Transfer to cold wallet
+     */
+    public function transferToColdWallet(float $amount): bool
+    {
+        try {
+            $hotWallet = $this->settingsRepository->getValue('crypto.hot_wallet_address');
+            $coldWallet = $this->settingsRepository->getValue('crypto.cold_wallet_address');
+            $privateKey = $this->settingsRepository->getValue('crypto.hot_wallet_private_key');
+
+            if (!$hotWallet || !$coldWallet || !$privateKey) {
+                throw new RuntimeException('Wallet configuration missing');
             }
 
-            return '0';
+            $result = $this->sendUsdt($hotWallet, $coldWallet, $amount, $privateKey);
+
+            $this->logger->info('Transfer to cold wallet completed', [
+                'amount' => $amount,
+                'txid' => $result['txid']
+            ]);
+
+            return true;
         } catch (Exception $e) {
-            $this->logger->error('Balance check failed', [
-                'address' => $address,
-                'error' => $e->getMessage(),
+            $this->logger->error('Failed to transfer to cold wallet', [
+                'amount' => $amount,
+                'error' => $e->getMessage()
             ]);
-            return '0';
+            return false;
         }
     }
 
-    private function checkAndMoveToColdWallet(string $balance): void
+    /**
+     * Send USDT transaction
+     */
+    public function sendUsdt(string $fromAddress, string $toAddress, float $amount, string $privateKey): array
     {
-        if (bccomp($balance, (string)$this->coldWalletThreshold, 8) > 0) {
-            $excessAmount = bcsub($balance, (string)($this->coldWalletThreshold * 0.5), 8);
+        try {
+            $decryptedKey = $this->encryptionService->decrypt($privateKey);
 
-            $this->logger->info('Moving funds to cold wallet', [
-                'amount' => $excessAmount,
-                'from' => $this->hotWalletAddress,
-                'to' => $this->coldWalletAddress,
+            // Convert amount to smallest unit
+            $value = bcmul((string)$amount, (string)pow(10, $this->networkConfig['TRC20']['decimals']));
+
+            // Build transaction
+            $response = $this->httpClient->request('POST', $this->apiUrl . '/v1/trc20/transfer', [
+                'headers' => [
+                    'TRON-PRO-API-KEY' => $this->apiKey,
+                ],
+                'json' => [
+                    'owner_address' => $fromAddress,
+                    'to_address' => $toAddress,
+                    'contract_address' => $this->networkConfig['TRC20']['contract'],
+                    'amount' => $value,
+                    'private_key' => $decryptedKey,
+                    'fee_limit' => 100000000 // 100 TRX max fee
+                ]
             ]);
 
-            // Implement cold wallet transfer
-        }
-    }
+            $data = $response->toArray();
 
-    public function estimateFee(): string
-    {
-        // TRC20 USDT transfer typically costs ~15 TRX
-        // This should be dynamic based on network conditions
-        return '2.5'; // USDT fee
+            if (!isset($data['txid'])) {
+                throw new RuntimeException('Transaction failed: ' . ($data['error'] ?? 'Unknown error'));
+            }
+
+            $this->logger->info('USDT transaction sent', [
+                'txid' => $data['txid'],
+                'from' => $fromAddress,
+                'to' => $toAddress,
+                'amount' => $amount
+            ]);
+
+            return [
+                'txid' => $data['txid'],
+                'success' => true
+            ];
+        } catch (Exception $e) {
+            $this->logger->error('Failed to send USDT', [
+                'from' => $fromAddress,
+                'to' => $toAddress,
+                'amount' => $amount,
+                'error' => $e->getMessage()
+            ]);
+            throw $e;
+        }
     }
 }

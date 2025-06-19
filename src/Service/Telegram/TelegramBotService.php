@@ -4,229 +4,393 @@ namespace App\Service\Telegram;
 
 use App\Entity\User;
 use App\Repository\UserRepository;
-use App\Service\Security\EncryptionService;
 use Exception;
-use Longman\TelegramBot\Entities\InlineKeyboard;
-use Longman\TelegramBot\Entities\InlineKeyboardButton;
-use Longman\TelegramBot\Entities\Update;
-use Longman\TelegramBot\Request;
-use Longman\TelegramBot\Telegram;
 use Psr\Log\LoggerInterface;
+use RuntimeException;
+use Symfony\Component\DependencyInjection\Attribute\Autowire;
+use Symfony\Component\Routing\Generator\UrlGeneratorInterface;
+use Symfony\Contracts\HttpClient\HttpClientInterface;
 use Symfony\Contracts\Translation\TranslatorInterface;
 
 class TelegramBotService
 {
-    private Telegram $telegram;
+    private HttpClientInterface $httpClient;
     private UserRepository $userRepository;
     private TranslatorInterface $translator;
-    private EncryptionService $encryption;
+    private UrlGeneratorInterface $urlGenerator;
     private LoggerInterface $logger;
-    private MenuBuilder $menuBuilder;
-    private array $commandHandlers;
+    private string $botToken;
+    private string $botUsername;
+    private string $apiUrl;
 
     public function __construct(
-        string              $botToken,
-        string              $botUsername,
-        UserRepository      $userRepository,
-        TranslatorInterface $translator,
-        EncryptionService   $encryption,
-        LoggerInterface     $logger,
-        MenuBuilder         $menuBuilder,
-        iterable            $commandHandlers
+        HttpClientInterface                                $httpClient,
+        UserRepository                                     $userRepository,
+        TranslatorInterface                                $translator,
+        UrlGeneratorInterface                              $urlGenerator,
+        LoggerInterface                                    $logger,
+        #[Autowire('%env(TELEGRAM_BOT_TOKEN)%')] string    $botToken,
+        #[Autowire('%env(TELEGRAM_BOT_USERNAME)%')] string $botUsername
     )
     {
-        $this->telegram = new Telegram($botToken, $botUsername);
+        $this->httpClient = $httpClient;
         $this->userRepository = $userRepository;
         $this->translator = $translator;
-        $this->encryption = $encryption;
+        $this->urlGenerator = $urlGenerator;
         $this->logger = $logger;
-        $this->menuBuilder = $menuBuilder;
-        $this->commandHandlers = iterator_to_array($commandHandlers);
+        $this->botToken = $botToken;
+        $this->botUsername = $botUsername;
+        $this->apiUrl = "https://api.telegram.org/bot{$botToken}/";
     }
 
-    public function processUpdate(Update $update): void
+    /**
+     * Send main menu
+     */
+    public function sendMainMenu(User $user): bool
     {
-        try {
-            $message = $update->getMessage() ?? $update->getCallbackQuery()?->getMessage();
+        $locale = $user->getPreferredLocale();
+        $this->translator->setLocale($locale);
 
-            if (!$message) {
-                return;
-            }
-
-            $telegramId = $message->getFrom()->getId();
-            $user = $this->userRepository->findOneBy(['telegramId' => $telegramId]);
-
-            if (!$user && !$this->isStartCommand($update)) {
-                $this->sendUnauthorizedMessage($telegramId);
-                return;
-            }
-
-            // Process callback queries
-            if ($callbackQuery = $update->getCallbackQuery()) {
-                $this->processCallbackQuery($callbackQuery, $user);
-                return;
-            }
-
-            // Process commands
-            if ($text = $message->getText()) {
-                $this->processCommand($text, $user, $message);
-            }
-        } catch (Exception $e) {
-            $this->logger->error('Telegram update processing failed', [
-                'update_id' => $update->getUpdateId(),
-                'error' => $e->getMessage(),
-            ]);
-        }
-    }
-
-    private function isStartCommand(Update $update): bool
-    {
-        $text = $update->getMessage()?->getText();
-        return $text && str_starts_with($text, '/start');
-    }
-
-    private function sendUnauthorizedMessage(int $chatId): void
-    {
-        $this->sendMessage($chatId, $this->translator->trans('telegram.unauthorized'));
-    }
-
-    public function sendMessage(int $chatId, string $text, ?InlineKeyboard $keyboard = null): void
-    {
-        $data = [
-            'chat_id' => $chatId,
-            'text' => $text,
-            'parse_mode' => 'HTML',
-        ];
-
-        if ($keyboard) {
-            $data['reply_markup'] = $keyboard;
-        }
-
-        Request::sendMessage($data);
-    }
-
-    private function processCallbackQuery($callbackQuery, ?User $user): void
-    {
-        $data = $callbackQuery->getData();
-        $chatId = $callbackQuery->getMessage()->getChat()->getId();
-
-        // Answer callback to remove loading state
-        Request::answerCallbackQuery([
-            'callback_query_id' => $callbackQuery->getId(),
+        $text = $this->translator->trans('telegram.menu.welcome', [
+            '%name%' => $user->getFirstName() ?? $user->getUsername()
         ]);
 
-        // Route to appropriate handler based on callback data
-        [$action, $params] = explode(':', $data, 2) + [null, null];
-
-        switch ($action) {
-            case 'language':
-                $this->handleLanguageChange($user, $params, $chatId);
-                break;
-            case 'balance':
-                $this->handleBalanceRequest($user, $chatId);
-                break;
-            case 'deposit':
-                $this->handleDepositRequest($user, $chatId);
-                break;
-            case 'withdraw':
-                $this->handleWithdrawRequest($user, $chatId);
-                break;
-            case 'referral':
-                $this->handleReferralInfo($user, $chatId);
-                break;
-        }
-    }
-
-    private function handleLanguageChange(User $user, string $language, int $chatId): void
-    {
-        if (in_array($language, ['en', 'uk', 'ru'])) {
-            $user->setLanguage($language);
-            $this->userRepository->save($user, true);
-
-            $this->sendMessage(
-                $chatId,
-                $this->translator->trans('telegram.language_changed', [], null, $language)
-            );
-
-            $this->sendMainMenu($user);
-        }
-    }
-
-    public function sendMainMenu(User $user): void
-    {
-        $keyboard = $this->menuBuilder->buildMainMenu($user);
-
-        $this->sendMessage(
-            $user->getTelegramId(),
-            $this->translator->trans('telegram.main_menu', [], null, $user->getLanguage()),
-            $keyboard
-        );
-    }
-
-    private function handleBalanceRequest(User $user, int $chatId): void
-    {
-        $message = $this->translator->trans('telegram.balance_info', [
-            'deposit' => $user->getDepositBalance(),
-            'bonus' => $user->getBonusBalance(),
-            'referral' => $user->getReferralBalance(),
-            'total' => $user->getTotalBalance(),
-            'available' => $user->getAvailableForWithdrawal(),
-        ], null, $user->getLanguage());
-
-        $this->sendMessage($chatId, $message);
-    }
-
-    private function processCommand(string $text, ?User $user, $message): void
-    {
-        $command = explode(' ', $text)[0];
-        $command = str_replace('/', '', $command);
-
-        if (isset($this->commandHandlers[$command])) {
-            $handler = $this->commandHandlers[$command];
-            $handler->handle($message, $user, $this);
-        } else {
-            $this->sendMessage($message->getChat()->getId(),
-                $this->translator->trans('telegram.unknown_command'));
-        }
-    }
-
-    public function sendAdminNotification(string $message, array $data = []): void
-    {
-        $admins = $this->userRepository->findByRole('ROLE_ADMIN');
-
-        foreach ($admins as $admin) {
-            try {
-                $this->sendMessage(
-                    $admin->getTelegramId(),
-                    $this->translator->trans($message, $data, null, $admin->getLanguage())
-                );
-            } catch (Exception $e) {
-                $this->logger->error('Failed to send admin notification', [
-                    'admin_id' => $admin->getId(),
-                    'error' => $e->getMessage(),
-                ]);
-            }
-        }
-    }
-
-    public function generateAuthToken(User $user): string
-    {
-        $payload = [
-            'user_id' => $user->getId(),
-            'telegram_id' => $user->getTelegramId(),
-            'timestamp' => time(),
-            'nonce' => bin2hex(random_bytes(16)),
+        $keyboard = [
+            [
+                ['text' => '💰 ' . $this->translator->trans('telegram.menu.balance'), 'callback_data' => 'balance'],
+                ['text' => '📈 ' . $this->translator->trans('telegram.menu.deposit'), 'callback_data' => 'deposit']
+            ],
+            [
+                ['text' => '📤 ' . $this->translator->trans('telegram.menu.withdraw'), 'callback_data' => 'withdraw'],
+                ['text' => '💎 ' . $this->translator->trans('telegram.menu.bonus'), 'callback_data' => 'bonus']
+            ],
+            [
+                ['text' => '👥 ' . $this->translator->trans('telegram.menu.referrals'), 'callback_data' => 'referrals'],
+                ['text' => '📊 ' . $this->translator->trans('telegram.menu.history'), 'callback_data' => 'history']
+            ],
+            [
+                ['text' => '⚙️ ' . $this->translator->trans('telegram.menu.settings'), 'callback_data' => 'settings'],
+                ['text' => '🌐 ' . $this->translator->trans('telegram.menu.language'), 'callback_data' => 'language']
+            ]
         ];
 
-        $token = base64_encode(json_encode($payload));
-        $signature = hash_hmac('sha256', $token, $_ENV['APP_SECRET']);
-
-        return $token . '.' . $signature;
+        return $this->sendMessageWithKeyboard($user->getTelegramChatId(), $text, $keyboard);
     }
 
-    public function verifyWebhookSignature(string $payload, string $signature): bool
+    /**
+     * Send message with inline keyboard
+     */
+    public function sendMessageWithKeyboard(int $chatId, string $text, array $keyboard): bool
     {
-        $expected = hash_hmac('sha256', $payload, $_ENV['TELEGRAM_WEBHOOK_SECRET']);
-        return hash_equals($expected, $signature);
+        return $this->sendMessage($chatId, $text, [
+            'reply_markup' => [
+                'inline_keyboard' => $keyboard
+            ]
+        ]);
+    }
+
+    /**
+     * Send message to user
+     */
+    public function sendMessage(int $chatId, string $text, array $options = []): bool
+    {
+        try {
+            $params = array_merge([
+                'chat_id' => $chatId,
+                'text' => $text,
+                'parse_mode' => 'HTML',
+                'disable_web_page_preview' => true
+            ], $options);
+
+            $response = $this->httpClient->request('POST', $this->apiUrl . 'sendMessage', [
+                'json' => $params
+            ]);
+
+            $result = $response->toArray();
+
+            if (!$result['ok']) {
+                throw new RuntimeException($result['description'] ?? 'Unknown error');
+            }
+
+            return true;
+        } catch (Exception $e) {
+            $this->logger->error('Failed to send Telegram message', [
+                'chat_id' => $chatId,
+                'error' => $e->getMessage()
+            ]);
+            return false;
+        }
+    }
+
+    /**
+     * Send balance info
+     */
+    public function sendBalanceInfo(User $user): bool
+    {
+        $locale = $user->getPreferredLocale();
+        $this->translator->setLocale($locale);
+
+        $text = $this->translator->trans('telegram.balance.info', [
+            '%deposit%' => number_format($user->getDepositBalance(), 2),
+            '%bonus%' => number_format($user->getBonusBalance(), 2),
+            '%total%' => number_format($user->getTotalBalance(), 2),
+            '%currency%' => 'USDT'
+        ]);
+
+        $keyboard = [
+            [
+                ['text' => '📈 ' . $this->translator->trans('telegram.button.deposit'), 'callback_data' => 'deposit'],
+                ['text' => '📤 ' . $this->translator->trans('telegram.button.withdraw'), 'callback_data' => 'withdraw_bonus']
+            ],
+            [
+                ['text' => '🔙 ' . $this->translator->trans('telegram.button.back'), 'callback_data' => 'menu']
+            ]
+        ];
+
+        return $this->sendMessageWithKeyboard($user->getTelegramChatId(), $text, $keyboard);
+    }
+
+    /**
+     * Send deposit instructions
+     */
+    public function sendDepositInstructions(User $user): bool
+    {
+        $locale = $user->getPreferredLocale();
+        $this->translator->setLocale($locale);
+
+        $depositAddress = $user->getDepositAddress();
+        if (!$depositAddress) {
+            return $this->sendMessage(
+                $user->getTelegramChatId(),
+                $this->translator->trans('telegram.error.no_deposit_address')
+            );
+        }
+
+        $text = $this->translator->trans('telegram.deposit.instructions', [
+            '%address%' => $depositAddress,
+            '%min%' => '100',
+            '%currency%' => 'USDT TRC20'
+        ]);
+
+        $keyboard = [
+            [
+                ['text' => '📋 ' . $this->translator->trans('telegram.button.copy_address'), 'copy_text' => ['text' => $depositAddress]]
+            ],
+            [
+                ['text' => '🔙 ' . $this->translator->trans('telegram.button.back'), 'callback_data' => 'menu']
+            ]
+        ];
+
+        // Send QR code
+        $this->sendQrCode($user->getTelegramChatId(), $depositAddress);
+
+        return $this->sendMessageWithKeyboard($user->getTelegramChatId(), $text, $keyboard);
+    }
+
+    /**
+     * Send QR code
+     */
+    public function sendQrCode(int $chatId, string $data): bool
+    {
+        try {
+            $qrApiUrl = "https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=" . urlencode($data);
+
+            $response = $this->httpClient->request('POST', $this->apiUrl . 'sendPhoto', [
+                'json' => [
+                    'chat_id' => $chatId,
+                    'photo' => $qrApiUrl,
+                    'caption' => 'QR Code'
+                ]
+            ]);
+
+            $result = $response->toArray();
+            return $result['ok'] ?? false;
+        } catch (Exception $e) {
+            $this->logger->error('Failed to send QR code', [
+                'chat_id' => $chatId,
+                'error' => $e->getMessage()
+            ]);
+            return false;
+        }
+    }
+
+    /**
+     * Send referral info
+     */
+    public function sendReferralInfo(User $user): bool
+    {
+        $locale = $user->getPreferredLocale();
+        $this->translator->setLocale($locale);
+
+        $referralLink = "https://t.me/{$this->botUsername}?start={$user->getReferralCode()}";
+        $referralStats = $this->userRepository->getReferralStats($user);
+
+        $text = $this->translator->trans('telegram.referral.info', [
+            '%link%' => $referralLink,
+            '%count%' => $referralStats['total_referrals'],
+            '%level1%' => $referralStats['level1_count'],
+            '%level2%' => $referralStats['level2_count'],
+            '%earnings%' => number_format($referralStats['total_earnings'], 2)
+        ]);
+
+        $keyboard = [
+            [
+                ['text' => '📋 ' . $this->translator->trans('telegram.button.copy_link'), 'copy_text' => ['text' => $referralLink]]
+            ],
+            [
+                ['text' => '📊 ' . $this->translator->trans('telegram.button.referral_stats'), 'callback_data' => 'referral_stats']
+            ],
+            [
+                ['text' => '🔙 ' . $this->translator->trans('telegram.button.back'), 'callback_data' => 'menu']
+            ]
+        ];
+
+        return $this->sendMessageWithKeyboard($user->getTelegramChatId(), $text, $keyboard);
+    }
+
+    /**
+     * Send language selection menu
+     */
+    public function sendLanguageMenu(User $user): bool
+    {
+        $text = "🌐 Select your language / Виберіть мову / Выберите язык:";
+
+        $keyboard = [
+            [
+                ['text' => '🇬🇧 English', 'callback_data' => 'lang_en'],
+                ['text' => '🇺🇦 Українська', 'callback_data' => 'lang_uk']
+            ],
+            [
+                ['text' => '🇷🇺 Русский', 'callback_data' => 'lang_ru']
+            ],
+            [
+                ['text' => '🔙 Back', 'callback_data' => 'menu']
+            ]
+        ];
+
+        return $this->sendMessageWithKeyboard($user->getTelegramChatId(), $text, $keyboard);
+    }
+
+    /**
+     * Send notification to admins
+     */
+    public function notifyAdmins(string $message, array $options = []): void
+    {
+        $admins = $this->userRepository->findAdmins();
+
+        foreach ($admins as $admin) {
+            if ($admin->getTelegramChatId() && $admin->isNotificationsEnabled()) {
+                $this->sendMessage($admin->getTelegramChatId(), $message, $options);
+            }
+        }
+
+        $this->logger->info('Admin notification sent', [
+            'message' => $message,
+            'admin_count' => count($admins)
+        ]);
+    }
+
+    /**
+     * Edit message
+     */
+    public function editMessage(int $chatId, int $messageId, string $text, array $options = []): bool
+    {
+        try {
+            $params = array_merge([
+                'chat_id' => $chatId,
+                'message_id' => $messageId,
+                'text' => $text,
+                'parse_mode' => 'HTML'
+            ], $options);
+
+            $response = $this->httpClient->request('POST', $this->apiUrl . 'editMessageText', [
+                'json' => $params
+            ]);
+
+            $result = $response->toArray();
+            return $result['ok'] ?? false;
+        } catch (Exception $e) {
+            return false;
+        }
+    }
+
+    /**
+     * Answer callback query
+     */
+    public function answerCallbackQuery(string $callbackQueryId, string $text = '', bool $showAlert = false): bool
+    {
+        try {
+            $response = $this->httpClient->request('POST', $this->apiUrl . 'answerCallbackQuery', [
+                'json' => [
+                    'callback_query_id' => $callbackQueryId,
+                    'text' => $text,
+                    'show_alert' => $showAlert
+                ]
+            ]);
+
+            $result = $response->toArray();
+            return $result['ok'] ?? false;
+        } catch (Exception $e) {
+            return false;
+        }
+    }
+
+    /**
+     * Set webhook
+     */
+    public function setWebhook(string $url, string $secretToken): bool
+    {
+        try {
+            $response = $this->httpClient->request('POST', $this->apiUrl . 'setWebhook', [
+                'json' => [
+                    'url' => $url,
+                    'allowed_updates' => ['message', 'callback_query'],
+                    'drop_pending_updates' => true,
+                    'secret_token' => $secretToken
+                ]
+            ]);
+
+            $result = $response->toArray();
+
+            if ($result['ok']) {
+                $this->logger->info('Webhook set successfully', ['url' => $url]);
+                return true;
+            }
+
+            throw new RuntimeException($result['description'] ?? 'Failed to set webhook');
+        } catch (Exception $e) {
+            $this->logger->error('Failed to set webhook', [
+                'url' => $url,
+                'error' => $e->getMessage()
+            ]);
+            return false;
+        }
+    }
+
+    /**
+     * Delete webhook
+     */
+    public function deleteWebhook(): bool
+    {
+        try {
+            $response = $this->httpClient->request('POST', $this->apiUrl . 'deleteWebhook');
+            $result = $response->toArray();
+            return $result['ok'] ?? false;
+        } catch (Exception $e) {
+            return false;
+        }
+    }
+
+    /**
+     * Get webhook info
+     */
+    public function getWebhookInfo(): array
+    {
+        try {
+            $response = $this->httpClient->request('GET', $this->apiUrl . 'getWebhookInfo');
+            return $response->toArray()['result'] ?? [];
+        } catch (Exception $e) {
+            return [];
+        }
     }
 }
